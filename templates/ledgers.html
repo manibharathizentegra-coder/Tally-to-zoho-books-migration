@@ -129,54 +129,74 @@
         <!-- TABS & CONTENT -->
         <div class="content-card">
             <!-- Tab Navigation -->
-            <ul class="nav nav-tabs px-3 pt-3" id="ledgerTabs" role="tablist">
+            <ul class="nav nav-pills mb-3">
                 <li class="nav-item">
-                    <button class="nav-link active" onclick="switchTab('all')" data-bs-toggle="tab">All Ledgers</button>
+                    <button class="nav-link active" onclick="switchTab('all')">All Ledgers</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('customers')" data-bs-toggle="tab">Customers</button>
+                    <button class="nav-link" onclick="switchTab('customers')">Customers</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('vendors')" data-bs-toggle="tab">Vendors</button>
+                    <button class="nav-link" onclick="switchTab('vendors')">Vendors</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('others')" data-bs-toggle="tab">Others</button>
+                    <button class="nav-link" onclick="switchTab('groups')">Groups Structure</button>
                 </li>
                 <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('groups')" data-bs-toggle="tab">Groups Structure</button>
+                    <button class="nav-link" onclick="switchTab('cost-categories')">Cost Categories</button>
+                </li>
+                <li class="nav-item">
+                    <button class="nav-link" onclick="switchTab('cost-centres')">Cost Centres</button>
                 </li>
             </ul>
 
+            <!-- TABS CONTENT -->
+            <div id="ledgersTableContainer">
+                <!-- Table Content -->
+                <div class="table-responsive" style="max-height: 600px;">
+                    <table class="table table-hover align-middle mb-0" id="dataTable">
+                        <thead class="sticky-top">
+                            <tr id="tableHeader">
+                                <th>Name</th>
+                                <th>Parent Group</th>
+                                <th>GSTIN</th>
+                                <th>Closing Balance</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody">
+                            <tr>
+                                <td colspan="4" class="text-center py-5 text-muted">
+                                    <i class="bi bi-cloud-arrow-down fs-1 mb-2"></i><br>
+                                    Click "Import All Ledgers" to fetch data
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                    <div id="treeView" class="p-4 d-none">
+                        <!-- Tree view content -->
+                    </div>
+                </div>
+            </div>
+
+            <div id="costCategoriesContainer" style="display:none;">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light"><tr><th>Name</th><th>Alloc Revenue</th><th>Alloc Non-Revenue</th></tr></thead>
+                    <tbody id="costCategoriesBody"></tbody>
+                </table>
+            </div>
+
+            <div id="costCentresContainer" style="display:none;">
+                <table class="table table-hover align-middle">
+                    <thead class="table-light"><tr><th>Name</th><th>Category</th><th>Parent</th></tr></thead>
+                    <tbody id="costCentresBody"></tbody>
+                </table>
+            </div>
+            
             <!-- Controls -->
             <div class="p-3 border-bottom bg-light d-flex justify-content-between">
                 <div class="input-group" style="max-width: 300px;">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
                     <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search..." onkeyup="handleSearch()">
-                </div>
-            </div>
-
-            <!-- Table Content -->
-            <div class="table-responsive" style="max-height: 600px;">
-                <table class="table table-hover align-middle mb-0" id="dataTable">
-                    <thead class="sticky-top">
-                        <tr id="tableHeader">
-                            <th>Name</th>
-                            <th>Parent Group</th>
-                            <th>GSTIN</th>
-                            <th>Closing Balance</th>
-                        </tr>
-                    </thead>
-                    <tbody id="tableBody">
-                        <tr>
-                            <td colspan="4" class="text-center py-5 text-muted">
-                                <i class="bi bi-cloud-arrow-down fs-1 mb-2"></i><br>
-                                Click "Import All Ledgers" to fetch data
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
-                <div id="treeView" class="p-4 d-none">
-                    <!-- Tree view content -->
                 </div>
             </div>
         </div>
@@ -199,15 +219,160 @@
         let allData = { ledgers: [], groups: [], group_hierarchy: {}, stats: {} };
         let currentTab = 'all';
 
+
         // Load data on startup
         document.addEventListener('DOMContentLoaded', () => {
-            const cached = localStorage.getItem('ledgersData');
-            if (cached) {
-                allData = JSON.parse(cached);
-                updateKPIs();
-                if (allData.ledgers.length > 0) switchTab('all');
-            }
+            loadFromDB();
         });
+
+        async function loadFromDB() {
+            try {
+                // Fetch All Data in parallel
+                const [resLedgers, resGroups, resCats, resCents] = await Promise.all([
+                    fetch('/api/db/ledgers'),
+                    fetch('/api/db/groups'),
+                    fetch('/api/db/cost-categories'),
+                    fetch('/api/db/cost-centres')
+                ]);
+
+                const ledgersData = await resLedgers.json();
+                const groupsData = await resGroups.json();
+                const catsData = await resCats.json();
+                const centsData = await resCents.json();
+                
+                if (ledgersData.ledgers) {
+                    allData.ledgers = ledgersData.ledgers;
+                    // Classify for UI
+                    allData.customers = ledgersData.ledgers.filter(l => l.type === 'customer');
+                    allData.vendors = ledgersData.ledgers.filter(l => l.type === 'vendor');
+                    allData.others = ledgersData.ledgers.filter(l => l.type === 'other');
+                }
+
+                if (groupsData.groups) allData.groups = groupsData.groups;
+                if (catsData.categories) allData.costCategories = catsData.categories;
+                if (centsData.centres) allData.costCentres = centsData.centres;
+
+                // Debug logging
+                console.log('📊 Data Loaded:', {
+                    ledgers: allData.ledgers?.length || 0,
+                    groups: allData.groups?.length || 0,
+                    costCategories: allData.costCategories?.length || 0,
+                    costCentres: allData.costCentres?.length || 0
+                });
+
+                // Update Stats
+                allData.stats = {
+                    total_ledgers: allData.ledgers.length,
+                    total_customers: allData.customers.length,
+                    total_vendors: allData.vendors.length,
+                    total_groups: allData.groups.length
+                };
+
+                updateKPIs();
+                
+                // Render specific tabs if active
+                if (currentTab === 'groups') renderGroupsTree();
+                else if (currentTab === 'cost-categories') renderCostCategories();
+                else if (currentTab === 'cost-centres') renderCostCentres();
+                else switchTab(currentTab);
+
+            } catch (err) {
+                console.error("Failed to load from DB", err);
+            }
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            
+            // Update UI buttons
+            document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
+            if (event && event.target) {
+                event.target.classList.add('active');
+            } else {
+                 const buttons = document.querySelectorAll('.nav-link');
+                 if (tab === 'all') buttons[0].classList.add('active');
+                 else if (tab === 'customers') buttons[1].classList.add('active');
+                 else if (tab === 'vendors') buttons[2].classList.add('active');
+                 else if (tab === 'groups') buttons[3].classList.add('active');
+                 else if (tab === 'cost-categories') buttons[4].classList.add('active');
+                 else if (tab === 'cost-centres') buttons[5].classList.add('active');
+            }
+
+            const tableContainer = document.getElementById('ledgersTableContainer');
+            const costCats = document.getElementById('costCategoriesContainer');
+            const costCents = document.getElementById('costCentresContainer');
+            
+            const dataTable = document.getElementById('dataTable');
+            const treeView = document.getElementById('treeView');
+
+            // 1. Hide EVERYTHING first
+            tableContainer.style.display = 'none';
+            costCats.style.display = 'none';
+            costCents.style.display = 'none';
+            
+            // 2. Specific Tabs
+            if (tab === 'cost-categories') {
+                costCats.style.display = 'block';
+                renderCostCategories();
+                return;
+            }
+
+            if (tab === 'cost-centres') {
+                costCents.style.display = 'block';
+                renderCostCentres();
+                return;
+            }
+
+            if (tab === 'groups') {
+                 tableContainer.style.display = 'block';
+                 dataTable.classList.add('d-none');
+                 treeView.classList.remove('d-none');
+                 renderGroupsTree();
+                 return;
+            } 
+            
+            // 3. Fallback: Standard Ledgers (All, Customers, Vendors, Others)
+            tableContainer.style.display = 'block';
+            treeView.classList.add('d-none');
+            dataTable.classList.remove('d-none');
+            
+            if (tab === 'all') renderTable(allData.ledgers);
+            else if (tab === 'customers') renderTable(allData.customers);
+            else if (tab === 'vendors') renderTable(allData.vendors);
+            else if (tab === 'others') renderTable(allData.others);
+        }
+
+        // ... Existing renderTable ...
+
+        function renderCostCategories() {
+             const tbody = document.getElementById('costCategoriesBody');
+             if(!allData.costCategories || allData.costCategories.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No Cost Categories Found</td></tr>';
+                 return;
+             }
+             tbody.innerHTML = allData.costCategories.map(c => `
+                <tr>
+                    <td>${c.name}</td>
+                    <td>${c.allocate_revenue || '-'}</td>
+                    <td>${c.allocate_non_revenue || '-'}</td>
+                </tr>
+             `).join('');
+        }
+
+        function renderCostCentres() {
+             const tbody = document.getElementById('costCentresBody');
+             if(!allData.costCentres || allData.costCentres.length === 0) {
+                 tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No Cost Centres Found</td></tr>';
+                 return;
+             }
+             tbody.innerHTML = allData.costCentres.map(c => `
+                <tr>
+                    <td>${c.name}</td>
+                    <td>${c.category || '-'}</td>
+                    <td>${c.parent || '-'}</td>
+                </tr>
+             `).join('');
+        }
 
         async function fetchData() {
             const btn = document.querySelector('.btn-primary');
@@ -225,9 +390,12 @@
                 }
 
                 allData = data;
-                localStorage.setItem('ledgersData', JSON.stringify(data)); // Save to cache
+                // localStorage.setItem('ledgersData', JSON.stringify(data)); // No longer needed as primary
                 updateKPIs();
                 switchTab(currentTab);
+                
+                // Reload from DB just to be sure we're in sync? 
+                // deeper: fetch returns the analyzed structure layout, which is good for immediate display.
 
             } catch (err) {
                 console.error(err);
@@ -276,30 +444,6 @@
             document.getElementById('total-groups').innerText = allData.stats.total_groups || 0;
         }
 
-        function switchTab(tab) {
-            currentTab = tab;
-            const tbody = document.getElementById('tableBody');
-            const treeView = document.getElementById('treeView');
-            const tableEl = document.getElementById('dataTable');
-
-            treeView.classList.add('d-none');
-            tableEl.classList.remove('d-none');
-
-            let dataToShow = [];
-
-            if (tab === 'all') dataToShow = allData.ledgers;
-            else if (tab === 'customers') dataToShow = allData.customers;
-            else if (tab === 'vendors') dataToShow = allData.vendors;
-            else if (tab === 'others') dataToShow = allData.others;
-            else if (tab === 'groups') {
-                tableEl.classList.add('d-none');
-                treeView.classList.remove('d-none');
-                renderGroupsTree();
-                return;
-            }
-
-            renderTable(dataToShow);
-        }
 
         function renderTable(rows) {
             const tbody = document.getElementById('tableBody');

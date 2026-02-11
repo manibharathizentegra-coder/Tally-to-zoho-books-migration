@@ -193,15 +193,17 @@
               <tr>
                 <th>Item Name</th>
                 <th>Group</th>
+                <th>Category</th>
                 <th>HSN/SAC</th>
-                <th>GST Rate</th>
+                <th>GST %</th>
+                <th>Duty %</th>
                 <th>Stock</th>
                 <th class="text-end">Value</th>
               </tr>
             </thead>
             <tbody id="tableBody">
               <tr>
-                <td colspan="6" class="text-center py-5 text-muted">
+                <td colspan="8" class="text-center py-5 text-muted">
                   <i class="bi bi-box-seam fs-1 mb-2"></i><br />
                   Click "Import All Items" to fetch data
                 </td>
@@ -240,17 +242,31 @@
       let allItems = [];
       let stats = {};
 
+
       // Load data on startup
       document.addEventListener("DOMContentLoaded", () => {
-        const cached = localStorage.getItem("itemsData");
-        if (cached) {
-          const data = JSON.parse(cached);
-          allItems = data.items;
-          stats = data.stats;
-          updateKPIs(stats);
-          renderTable(allItems);
-        }
+          loadFromDB();
       });
+
+      async function loadFromDB() {
+          try {
+              const res = await fetch('/api/db/items');
+              const data = await res.json();
+              
+              if (data.items) {
+                  allItems = data.items;
+                  stats = {
+                      total_items: data.items.length,
+                      categories: new Set(data.items.map(i => i.group_name || i.group)).size,
+                      total_value: data.items.reduce((sum, i) => sum + (parseFloat(i.value) || 0), 0)
+                  };
+                  updateKPIs(stats);
+                  renderTable(allItems);
+              }
+          } catch (err) {
+              console.error("Failed to load from DB", err);
+          }
+      }
 
       async function fetchData() {
         const btn = document.querySelector(".btn-primary");
@@ -270,7 +286,7 @@
 
           allItems = data.items;
           stats = data.stats;
-          localStorage.setItem("itemsData", JSON.stringify(data)); // Save to cache
+          // localStorage.setItem("itemsData", JSON.stringify(data)); // No longer needed as primary
 
           updateKPIs(stats);
           renderTable(allItems);
@@ -333,7 +349,7 @@
         const tbody = document.getElementById("tableBody");
         if (!items || items.length === 0) {
           tbody.innerHTML =
-            '<tr><td colspan="6" class="text-center py-4 text-muted">No Items Found</td></tr>';
+            '<tr><td colspan="8" class="text-center py-4 text-muted">No Items Found</td></tr>';
           return;
         }
 
@@ -342,9 +358,11 @@
             (i) => `
                 <tr onclick="showDetails('${i.name.replace(/'/g, "\\'")}')" style="cursor: pointer;">
                     <td class="fw-medium text-primary">${i.name}</td>
-                    <td><span class="badge bg-light text-dark border">${i.group || "-"}</span></td>
+                    <td><span class="badge bg-light text-dark border">${i.group_name || i.group || "-"}</span></td>
+                    <td><small class="text-muted">${i.category || "-"}</small></td>
                     <td>${i.hsn || "-"}</td>
                     <td>${i.gst_rate ? i.gst_rate + "%" : "-"}</td>
+                    <td>${i.rate_of_duty ? i.rate_of_duty + "%" : "-"}</td>
                     <td>${i.qty ? i.qty + " " + (i.qty_unit || "") : "-"}</td>
                     <td class="text-end fw-bold">${i.value ? "₹" + parseFloat(i.value).toLocaleString() : "-"}</td>
                 </tr>
@@ -361,14 +379,14 @@
                 <div class="mb-4">
                     <h6 class="text-uppercase text-muted fw-bold small mb-2">Item Overview</h6>
                     <div class="mb-2"><span class="fw-bold">Name:</span> ${item.name}</div>
-                    <div class="mb-2"><span class="fw-bold">Group:</span> ${item.group || "-"}</div>
+                    <div class="mb-2"><span class="fw-bold">Group:</span> ${item.group_name || item.group || "-"}</div>
                     <div class="mb-2"><span class="fw-bold">Category:</span> ${item.category || "-"}</div>
                     <div class="mb-2"><span class="fw-bold">Base Unit:</span> ${item.unit || "-"}</div>
                 </div>
 
                 <div class="mb-4">
                     <h6 class="text-uppercase text-muted fw-bold small mb-2">Stock & Valuation</h6>
-                    <div class="row g-2">
+                    <div class="row g-3">
                         <div class="col-6"><small class="text-muted">Opening Qty</small><div class="fw-bold">${item.qty || 0} ${item.qty_unit || ""}</div></div>
                         <div class="col-6"><small class="text-muted">Rate</small><div>${item.rate || 0} / ${item.rate_unit || ""}</div></div>
                         <div class="col-12 mt-2">
@@ -406,7 +424,13 @@
                             <div class="col-6"><small class="text-muted">Supply Type</small><div>${item.supply_type || "-"}</div></div>
                             <div class="col-6"><small class="text-muted">Taxability</small><div>${item.taxability || "-"}</div></div>
                             <div class="col-6"><small class="text-muted">GST Rate</small><div class="fw-bold text-success">${item.gst_rate ? item.gst_rate + "%" : "-"}</div></div>
-                            <div class="col-12 border-top pt-2 mt-2"><small class="text-muted">Rate Source: ${item.gst_rate_source || "-"}</small></div>
+                            <div class="col-12 border-top pt-2 mt-2">
+                                <small class="text-muted">Rate Source: ${item.gst_rate_source || "-"}</small>
+                            </div>
+                             <div class="col-12 pt-2">
+                                <small class="text-muted">Rate of Duty</small>
+                                <div class="fw-bold fs-5 text-dark">${item.rate_of_duty ? item.rate_of_duty + "%" : "0%"}</div>
+                            </div>
                         </div>
                     </div>
                 </div>

@@ -57,12 +57,75 @@ except ImportError as e:
     purchase_order_module = None
 
 
+try:
+    import database_manager
+    print("✅ Successfully imported database_manager")
+except ImportError as e:
+    print(f"❌ Error importing database_manager: {e}")
+    database_manager = None
+
 app = Flask(__name__)
 CORS(app)
 
 # ---------------------------------------------------------
 # ROUTES
 # ---------------------------------------------------------
+
+@app.route('/api/db/ledgers', methods=['GET'])
+def api_db_ledgers():
+    if not database_manager: return jsonify({"error": "DB Manager not loaded"}), 500
+    try:
+        ledgers = database_manager.get_all_ledgers()
+        return jsonify({"ledgers": ledgers, "count": len(ledgers)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/db/items', methods=['GET'])
+def api_db_items():
+    if not database_manager: return jsonify({"error": "DB Manager not loaded"}), 500
+    try:
+        items = database_manager.get_all_items()
+        return jsonify({"items": items, "count": len(items)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/db/groups', methods=['GET'])
+def api_db_groups():
+    if not database_manager: return jsonify({"error": "DB Manager not loaded"}), 500
+    try:
+        groups = database_manager.get_all_groups()
+        return jsonify({"groups": groups, "count": len(groups)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/db/cost-categories', methods=['GET'])
+def api_db_cost_categories():
+    if not database_manager: return jsonify({"error": "DB Manager not loaded"}), 500
+    try:
+        data = database_manager.get_all_cost_categories()
+        return jsonify({"categories": data, "count": len(data)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/db/cost-centres', methods=['GET'])
+def api_db_cost_centres():
+    if not database_manager: return jsonify({"error": "DB Manager not loaded"}), 500
+    try:
+        data = database_manager.get_all_cost_centres()
+        return jsonify({"centres": data, "count": len(data)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/cost-centers/fetch', methods=['GET'])
+def api_fetch_cost_centers():
+    try:
+        from cost_centers import cost_center_backend
+        data = cost_center_backend.get_all_cost_data()
+        return jsonify({"status": "success", "data": data})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/')
 def index():

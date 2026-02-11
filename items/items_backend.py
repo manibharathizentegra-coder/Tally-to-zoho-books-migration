@@ -1,6 +1,18 @@
 import requests
 import re
 from datetime import datetime
+import sys
+import os
+
+# Ensure root directory is in path to import database_manager
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    import database_manager
+except ImportError:
+    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    database_manager = None
+
 
 TALLY_URL = "http://localhost:9000"
 
@@ -168,7 +180,12 @@ def fetch_stock_groups():
 # FETCH STOCK ITEMS (WITH INHERITANCE)
 # ----------------------------------------------------------
 
+
 def fetch_stock_items(groups):
+    
+    # Initialize DB if possible
+    if database_manager:
+        database_manager.init_db()
 
     xml_req = """
 <ENVELOPE>
@@ -256,9 +273,13 @@ def fetch_stock_items(groups):
         value = extract_number(extract_field(block, "OPENINGVALUE"))
         value = abs(value) if value else ""
 
-        items.append({
+        # Custom field for Category if it exists, or standard CATEGORY tag
+        item_category = extract_field(block, "CATEGORY")
+
+        item_data = {
             "name": name.replace("&amp;", "&"),
             "group": parent,
+            "category": item_category,
             "unit": extract_field(block, "BASEUNITS"),
 
             # HSN/GST details (item-level first, then group-level)
@@ -280,7 +301,37 @@ def fetch_stock_items(groups):
             "rate": rate,
             "rate_unit": rate_unit,
             "value": value,
-        })
+        }
+        
+        # ------------------------------------------------
+        # SAVE TO SQLITE
+        # ------------------------------------------------
+        if database_manager:
+            db_data = {
+                "name": item_data["name"],
+                "group_name": item_data["group"],
+                "category": item_data["category"],
+                "unit": item_data["unit"],
+                "hsn_source": item_data.get("hsn_source", ""),
+                "hsn": item_data.get("hsn", ""),
+                "description": item_data.get("description", ""),
+                
+                "gst_applicable": item_data.get("gst_applicable", ""),
+                "gst_rate_source": item_data.get("gst_rate_source", ""),
+                "gst_rate": item_data.get("gst_rate", 0) or 0,
+                "taxability": item_data.get("taxability", ""),
+                "supply_type": item_data.get("supply_type", ""),
+                "rate_of_duty": item_data.get("rate_of_duty", 0) or 0,
+                
+                "qty": item_data.get("qty", 0) or 0,
+                "qty_unit": item_data.get("qty_unit", ""),
+                "rate": item_data.get("rate", 0) or 0,
+                "rate_unit": item_data.get("rate_unit", ""),
+                "value": item_data.get("value", 0) or 0
+            }
+            database_manager.insert_or_update_item(db_data)
+
+        items.append(item_data)
 
     return items
 
@@ -360,10 +411,22 @@ def sync_items_to_zoho(selected_items=None):
 
     print("🚀 Starting Zoho Sync (Items)...")
     
+
     if not selected_items:
-        data = get_all_items_data()
-        if not data: return {"status": "error", "message": "No Tally Data"}
-        items_to_sync = data["items"]
+        if database_manager:
+            print("💾 Fetching items from SQLite Database...")
+            items_to_sync = database_manager.get_all_items()
+            
+            if not items_to_sync:
+                print("⚠️ No items found in DB. Trying Tally fetch...")
+                data = get_all_items_data()
+                if data:
+                    items_to_sync = data["items"]
+        else:
+            print("📡 Fetching items directly from Tally...")
+            data = get_all_items_data()
+            if not data: return {"status": "error", "message": "No Tally Data"}
+            items_to_sync = data["items"]
     else:
         items_to_sync = selected_items
 

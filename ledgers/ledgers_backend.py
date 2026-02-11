@@ -1,6 +1,19 @@
 import requests
 import re
 from collections import defaultdict
+import sys
+import os
+
+# Ensure root directory is in path to import database_manager
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+try:
+    import database_manager
+except ImportError:
+    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    database_manager = None
+
+# ... (rest of imports)
 
 # ----------------------------------------------------------
 # XML HELPERS
@@ -23,6 +36,10 @@ def extract_all_fields(xml_block, tag):
 # ----------------------------------------------------------
 
 def fetch_groups_from_tally():
+    # Initialize DB if possible
+    if database_manager:
+        database_manager.init_db()
+
     xml_request = """<ENVELOPE>
   <HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
   <BODY>
@@ -54,10 +71,21 @@ def fetch_groups_from_tally():
             if not name or name == "?":
                 continue
 
-            groups.append({
+            group_data = {
                 "name": name.replace("&amp;", "&"),
                 "parent": extract_field(block, "PARENT")
-            })
+            }
+            groups.append(group_data)
+            
+            # ------------------------------------------------
+            # SAVE TO SQLITE
+            # ------------------------------------------------
+            if database_manager:
+                database_manager.insert_or_update_group({
+                    "name": group_data["name"],
+                    "parent": group_data["parent"],
+                    "primary_group": "" # Tally doesn't explicitly give this easily here without traversal
+                })
 
         print(f"✅ Groups fetched: {len(groups)}")
         return groups
@@ -182,8 +210,13 @@ def get_all_descendants(group_name, children_map, visited=None):
 # LEDGER CLASSIFICATION
 # ----------------------------------------------------------
 
+
 def analyze_ledgers(ledgers, groups):
     children_map = build_group_hierarchy(groups)
+    
+    # Initialize DB if possible
+    if database_manager:
+        database_manager.init_db()
 
     # All sub-groups under Sundry Debtors
     sd = {"Sundry Debtors"}
@@ -199,18 +232,42 @@ def analyze_ledgers(ledgers, groups):
 
     for ledger in ledgers:
         parent = ledger["parent"]
+        ledger_type = "other"
 
         if parent in sd:
-            ledger["type"] = "customer"
+            ledger_type = "customer"
             sundry_debtors.append(ledger)
 
         elif parent in sc:
-            ledger["type"] = "vendor"
+            ledger_type = "vendor"
             sundry_creditors.append(ledger)
 
         else:
-            ledger["type"] = "other"
             other_ledgers.append(ledger)
+        
+        ledger["type"] = ledger_type
+
+        # ------------------------------------------------
+        # SAVE TO SQLITE
+        # ------------------------------------------------
+        if database_manager:
+            db_data = {
+                "name": ledger["name"],
+                "parent": ledger["parent"],
+                "type": ledger_type,
+                "address": ledger.get("address", ""),
+                "state": ledger.get("state", ""),
+                "country": ledger.get("country", ""),
+                "pincode": ledger.get("pincode", ""),
+                "email": ledger.get("email", ""),
+                "phone": ledger.get("phone", ""),
+                "gstin": ledger.get("gstin", ""),
+                "gst_reg_type": ledger.get("gst_reg_type", ""),
+                "pan": ledger.get("pan", ""),
+                "opening_balance": ledger.get("opening_balance", 0) or 0,
+                "closing_balance": ledger.get("closing_balance", 0) or 0
+            }
+            database_manager.insert_or_update_ledger(db_data)
 
     return {
         "ledgers": ledgers,
@@ -303,10 +360,33 @@ if __name__ == "__main__":
 # API WRAPPER
 # ----------------------------------------------------------
 
+# ----------------------------------------------------------
+# COST CENTERS IMPORT
+# ----------------------------------------------------------
+try:
+    from cost_centers import cost_center_backend
+except ImportError:
+    print("⚠️ Warning: Could not import cost_center_backend")
+    cost_center_backend = None
+
+
 def analyze_ledgers_and_groups():
     """Wrapper function for API to get all data"""
+    # 1. Fetch Groups
     groups = fetch_groups_from_tally()
+    
+    # 2. Fetch Ledgers
     ledgers = fetch_ledgers_from_tally()
+
+    # 3. Fetch Cost Centers (New)
+    if cost_center_backend:
+        print("\n💰 Fetching Cost Categories...")
+        cats = cost_center_backend.fetch_cost_categories()
+        print(f"✅ Cost Categories fetched: {len(cats)}")
+
+        print("\n💰 Fetching Cost Centres...")
+        cents = cost_center_backend.fetch_cost_centres()
+        print(f"✅ Cost Centres fetched: {len(cents)}")
     
     if not ledgers: return None
     
@@ -367,15 +447,26 @@ def sync_ledgers_to_zoho(selected_ledgers=None):
 
     print("🚀 Starting Zoho Sync (Ledgers)...")
     
+
     # Get fresh data if not provided
     if not selected_ledgers:
-        data = analyze_ledgers_and_groups()
-        if not data: return {"status": "error", "message": "No Tally Data"}
-        # Sync Customers and Vendors preferably
-        ledgers_to_sync = data["customers"] + data["vendors"]
-        # Or just everyone? Let's stick to Customers/Vendors to avoid junk
-        # User said "all ledgers", but Tally has many internal ones. 
-        # Safest is C & V.
+        if database_manager:
+            print("💾 Fetching ledgers from SQLite Database...")
+            all_ledgers = database_manager.get_all_ledgers()
+            # Filter for customers and vendors only
+            ledgers_to_sync = [l for l in all_ledgers if l['type'] in ['customer', 'vendor']]
+            
+            if not ledgers_to_sync:
+                print("⚠️ No customers or vendors found in DB. Trying Tally fetch...")
+                data = analyze_ledgers_and_groups()
+                if data:
+                    ledgers_to_sync = data["customers"] + data["vendors"]
+        else:
+            print("📡 Fetching ledgers directly from Tally...")
+            data = analyze_ledgers_and_groups()
+            if not data: return {"status": "error", "message": "No Tally Data"}
+            # Sync Customers and Vendors preferably
+            ledgers_to_sync = data["customers"] + data["vendors"]
     else:
         ledgers_to_sync = selected_ledgers
 
