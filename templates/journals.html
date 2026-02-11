@@ -1,0 +1,505 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Journals - Tally Software</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
+        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
+        
+        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
+        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
+        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
+        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+            <i class="bi bi-wallet2 text-primary fs-3 me-2"></i>
+            <span class="fw-bold text-primary">TallySoft</span>
+        </a>
+        <div class="collapse navbar-collapse ms-4">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/ledgers">
+                        <i class="bi bi-journal-text me-1"></i> Ledgers
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/items">
+                        <i class="bi bi-box-seam me-1"></i> Items
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link active" href="/journals">
+                        <i class="bi bi-journal-bookmark me-1"></i> Journals
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/invoices">
+                        <i class="bi bi-receipt me-1"></i> Invoices
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/bills">
+                        <i class="bi bi-file-earmark-text me-1"></i> Bills
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/sales_orders">
+                        <i class="bi bi-cart-check me-1"></i> Sales Orders
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/purchase_orders">
+                        <i class="bi bi-bag-check me-1"></i> Purchase Orders
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4 px-4">
+        
+        <!-- HEADER & ACTIONS -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1">Journal Entries</h4>
+                <p class="text-muted small mb-0">View and sync journal vouchers from Tally to Zoho Books</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button onclick="refreshCache()" class="btn btn-outline-secondary d-flex align-items-center" title="Refresh ledger cache from Tally">
+                    <i class="bi bi-arrow-clockwise me-2"></i> Refresh Cache
+                </button>
+                <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
+                    <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+                </button>
+                <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
+                    <i class="bi bi-cloud-download me-2"></i> Import Journals
+                </button>
+            </div>
+        </div>
+
+        <!-- DATE RANGE SELECTOR -->
+        <div class="content-card mb-4 p-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">From Date</label>
+                    <input type="date" id="fromDate" class="form-control" value="2025-04-01">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">To Date</label>
+                    <input type="date" id="toDate" class="form-control" value="2025-04-30">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Limit (optional)</label>
+                    <input type="number" id="limitInput" class="form-control" placeholder="All">
+                </div>
+                <div class="col-md-4">
+                    <button onclick="fetchData()" class="btn btn-secondary w-100">
+                        <i class="bi bi-funnel me-2"></i> Apply Filter
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-4">
+                <div class="kpi-card" style="border-color: #5e35b1;">
+                    <div class="kpi-label">Total Journals</div>
+                    <div class="kpi-value" id="total-journals">0</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="kpi-card" style="border-color: #e53935;">
+                    <div class="kpi-label">Total Debit</div>
+                    <div class="kpi-value text-danger" id="total-debit">₹0</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="kpi-card" style="border-color: #43a047;">
+                    <div class="kpi-label">Total Credit</div>
+                    <div class="kpi-value text-success" id="total-credit">₹0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENT -->
+        <div class="content-card">
+            <div class="p-3 border-bottom bg-light d-flex justify-content-between">
+                <div class="input-group" style="max-width: 300px;">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search journals..." onkeyup="handleSearch()">
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 600px;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="sticky-top">
+                        <tr>
+                            <th>Journal #</th>
+                            <th>Date</th>
+                            <th>Narration</th>
+                            <th class="text-end">Debit</th>
+                            <th class="text-end">Credit</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-journal-bookmark fs-1 mb-2"></i><br>
+                                Click "Import Journals" to fetch data
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- JOURNAL DETAIL MODAL -->
+    <div class="modal fade" id="journalModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-journal-bookmark me-2"></i>Journal Entry Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="journalDetails">
+                    <!-- Details will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allJournals = [];
+        let stats = {};
+
+        // Load data on startup
+        document.addEventListener('DOMContentLoaded', () => {
+            const cached = localStorage.getItem('journalsData');
+            if (cached) {
+                const data = JSON.parse(cached);
+                allJournals = data.journals;
+                stats = data.stats;
+                updateKPIs(stats);
+                renderJournals(allJournals);
+            }
+        });
+
+        function formatDate(tallyDate) {
+            if (!tallyDate || tallyDate.length !== 8) return tallyDate;
+            return `${tallyDate.slice(6,8)}/${tallyDate.slice(4,6)}/${tallyDate.slice(0,4)}`;
+        }
+
+        function formatDateForAPI(dateInput) {
+            return dateInput.replace(/-/g, '');
+        }
+
+        async function fetchData() {
+            const btn = document.querySelector('.btn-primary');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Importing...';
+
+            try {
+                const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+                const toDate = formatDateForAPI(document.getElementById('toDate').value);
+                const limit = document.getElementById('limitInput').value || null;
+
+                const res = await fetch('/api/journals/fetch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ from_date: fromDate, to_date: toDate, limit: limit ? parseInt(limit) : null })
+                });
+                const data = await res.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                allJournals = data.journals;
+                stats = data.stats;
+                localStorage.setItem('journalsData', JSON.stringify(data));
+                
+                updateKPIs(stats);
+                renderJournals(allJournals);
+
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        async function syncZoho() {
+            if (!confirm("This will sync the fetched Journal Entries to Zoho Books. Continue?")) return;
+
+            const btn = document.querySelector('.btn-outline-primary');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+
+            try {
+                const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+                const toDate = formatDateForAPI(document.getElementById('toDate').value);
+                const limit = document.getElementById('limitInput').value || null;
+
+                const res = await fetch('/api/journals/sync_zoho', { 
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        journals: null, 
+                        from_date: fromDate, 
+                        to_date: toDate,
+                        limit: limit ? parseInt(limit) : null
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    const total = data.stats.created + data.stats.failed;
+                    let msg = '✅ Zoho Sync Complete!\n\n';
+                    msg += `📊 Summary:\n`;
+                    msg += `  Total Journals: ${total}\n`;
+                    msg += `  ✅ Successfully Created: ${data.stats.created}\n`;
+                    msg += `  ❌ Failed: ${data.stats.failed}\n\n`;
+                    
+                    if (data.stats.created > 0) {
+                        msg += `${data.stats.created} Journal(s) have been created in Zoho Books!\n\n`;
+                    }
+                    
+                    // Show detailed error messages
+                    if (data.stats.failed > 0 && data.stats.errors && data.stats.errors.length > 0) {
+                        msg += `⚠️ Failed Journals:\n`;
+                        msg += `${'='.repeat(50)}\n`;
+                        data.stats.errors.forEach((err, idx) => {
+                            msg += `${idx + 1}. Journal: ${err.journal_number}\n`;
+                            msg += `   Date: ${err.date || 'N/A'}\n`;
+                            msg += `   Error: ${err.error}\n\n`;
+                        });
+                    }
+                    
+                    alert(msg);
+                } else {
+                    alert('❌ Sync Error: ' + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error during Sync');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        async function refreshCache() {
+            if (!confirm("This will refresh the ledger cache from Tally. Continue?")) return;
+
+            const btn = document.querySelector('.btn-outline-secondary');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Refreshing...';
+
+            try {
+                const res = await fetch('/api/journals/refresh_cache', { method: 'POST' });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    alert('✅ Cache Refreshed Successfully!\n\n' + data.message);
+                } else {
+                    alert('❌ Error: ' + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        function updateKPIs(stats) {
+            if (!stats) return;
+            document.getElementById('total-journals').innerText = stats.total_journals || 0;
+            document.getElementById('total-debit').innerText = '₹' + (stats.total_debit || 0).toLocaleString();
+            document.getElementById('total-credit').innerText = '₹' + (stats.total_credit || 0).toLocaleString();
+        }
+
+        function renderJournals(journals) {
+            const tbody = document.getElementById('tableBody');
+            if (!journals || journals.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No Journals Found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = journals.map((j, idx) => {
+                // Calculate debit and credit totals for this journal
+                let debitTotal = 0;
+                let creditTotal = 0;
+                j.line_items.forEach(item => {
+                    if (item.debit_or_credit === 'debit') {
+                        debitTotal += item.amount;
+                    } else {
+                        creditTotal += item.amount;
+                    }
+                });
+
+                return `
+                <tr style="cursor: pointer;" onclick="showJournalDetails(${idx})">
+                    <td class="fw-medium text-primary">${j.journal_number}</td>
+                    <td>${formatDate(j.date)}</td>
+                    <td>${j.narration || '(No narration)'}</td>
+                    <td class="text-end text-danger fw-bold">₹${debitTotal.toLocaleString()}</td>
+                    <td class="text-end text-success fw-bold">₹${creditTotal.toLocaleString()}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showJournalDetails(${idx})">
+                            <i class="bi bi-eye"></i> View
+                        </button>
+                    </td>
+                </tr>
+            `}).join('');
+        }
+
+        function showJournalDetails(idx) {
+            const j = allJournals[idx];
+            const modal = new bootstrap.Modal(document.getElementById('journalModal'));
+            
+            // Separate debit and credit entries
+            const debitEntries = j.line_items.filter(item => item.debit_or_credit === 'debit');
+            const creditEntries = j.line_items.filter(item => item.debit_or_credit === 'credit');
+            
+            let debitTotal = 0;
+            let creditTotal = 0;
+            
+            let html = `
+                <div class="row g-3">
+                    <div class="col-md-12">
+                        <h6 class="text-primary border-bottom pb-2">Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><th width="20%">Journal Number:</th><td>${j.journal_number}</td></tr>
+                            <tr><th>Date:</th><td>${formatDate(j.date)}</td></tr>
+                            <tr><th>Narration:</th><td>${j.narration || '(No narration)'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+
+                <h6 class="text-danger border-bottom pb-2 mt-3">Debit Entries</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Ledger Name</th>
+                                <th>Type</th>
+                                <th>Category</th>
+                                <th>Cost Centre</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${debitEntries.map(item => {
+                                debitTotal += item.amount;
+                                return `
+                                <tr>
+                                    <td>${item.ledger_name}</td>
+                                    <td><span class="badge bg-secondary">${item.ledger_type || 'N/A'}</span></td>
+                                    <td>${item.tag_category || '-'}</td>
+                                    <td>${item.tag_option || '-'}</td>
+                                    <td class="text-end fw-bold text-danger">₹${item.amount.toLocaleString()}</td>
+                                </tr>
+                            `}).join('')}
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end fw-bold">Total Debit:</td>
+                                <td class="text-end fw-bold text-danger">₹${debitTotal.toLocaleString()}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <h6 class="text-success border-bottom pb-2 mt-3">Credit Entries</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Ledger Name</th>
+                                <th>Type</th>
+                                <th>Category</th>
+                                <th>Cost Centre</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${creditEntries.map(item => {
+                                creditTotal += item.amount;
+                                return `
+                                <tr>
+                                    <td>${item.ledger_name}</td>
+                                    <td><span class="badge bg-secondary">${item.ledger_type || 'N/A'}</span></td>
+                                    <td>${item.tag_category || '-'}</td>
+                                    <td>${item.tag_option || '-'}</td>
+                                    <td class="text-end fw-bold text-success">₹${item.amount.toLocaleString()}</td>
+                                </tr>
+                            `}).join('')}
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end fw-bold">Total Credit:</td>
+                                <td class="text-end fw-bold text-success">₹${creditTotal.toLocaleString()}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                <div class="row mt-3">
+                    <div class="col-md-6"></div>
+                    <div class="col-md-6">
+                        <div class="card ${debitTotal === creditTotal ? 'bg-success' : 'bg-warning'} bg-opacity-10">
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr><th>Total Debit:</th><td class="text-end text-danger fw-bold">₹${debitTotal.toLocaleString()}</td></tr>
+                                    <tr><th>Total Credit:</th><td class="text-end text-success fw-bold">₹${creditTotal.toLocaleString()}</td></tr>
+                                    <tr class="table-light"><th class="fs-5">Difference:</th><td class="text-end fs-5 fw-bold ${debitTotal === creditTotal ? 'text-success' : 'text-danger'}">₹${Math.abs(debitTotal - creditTotal).toLocaleString()}</td></tr>
+                                </table>
+                                ${debitTotal === creditTotal ? '<p class="text-success mb-0 text-center"><i class="bi bi-check-circle me-1"></i>Balanced Entry</p>' : '<p class="text-danger mb-0 text-center"><i class="bi bi-exclamation-triangle me-1"></i>Unbalanced Entry</p>'}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('journalDetails').innerHTML = html;
+            modal.show();
+        }
+
+        function handleSearch() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allJournals.filter(j => 
+                j.journal_number.toLowerCase().includes(q) ||
+                (j.narration && j.narration.toLowerCase().includes(q)) ||
+                j.line_items.some(item => item.ledger_name.toLowerCase().includes(q))
+            );
+            renderJournals(filtered);
+        }
+    </script>
+</body>
+</html>

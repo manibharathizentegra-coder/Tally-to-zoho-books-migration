@@ -1,0 +1,468 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Invoices - Tally Software</title>
+    
+    <!-- Bootstrap 5 -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
+        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
+        
+        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
+        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
+        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+
+        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
+        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+            <i class="bi bi-wallet2 text-primary fs-3 me-2"></i>
+            <span class="fw-bold text-primary">TallySoft</span>
+        </a>
+        <div class="collapse navbar-collapse ms-4">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/ledgers">
+                        <i class="bi bi-journal-text me-1"></i> Ledgers
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/items">
+                        <i class="bi bi-box-seam me-1"></i> Items
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/journals">
+                        <i class="bi bi-journal-bookmark me-1"></i> Journals
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link active" href="/invoices">
+                        <i class="bi bi-receipt me-1"></i> Invoices
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/bills">
+                        <i class="bi bi-file-earmark-text me-1"></i> Bills
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/sales_orders">
+                        <i class="bi bi-cart-check me-1"></i> Sales Orders
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/purchase_orders">
+                        <i class="bi bi-bag-check me-1"></i> Purchase Orders
+                    </a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4 px-4">
+        
+        <!-- HEADER & ACTIONS -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1">Sales Invoices</h4>
+                <p class="text-muted small mb-0">View and sync sales invoices from Tally to Zoho Books</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
+                    <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+                </button>
+                <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
+                    <i class="bi bi-cloud-download me-2"></i> Import Invoices
+                </button>
+            </div>
+        </div>
+
+        <!-- DATE RANGE SELECTOR -->
+        <div class="content-card mb-4 p-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">From Date</label>
+                    <input type="date" id="fromDate" class="form-control" value="2025-04-01">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">To Date</label>
+                    <input type="date" id="toDate" class="form-control" value="2025-04-30">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Limit (optional)</label>
+                    <input type="number" id="limitInput" class="form-control" placeholder="All">
+                </div>
+                <div class="col-md-4">
+                    <button onclick="fetchData()" class="btn btn-secondary w-100">
+                        <i class="bi bi-funnel me-2"></i> Apply Filter
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="kpi-card" style="border-color: #5e35b1;">
+                    <div class="kpi-label">Total Invoices</div>
+                    <div class="kpi-value" id="total-invoices">0</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="kpi-card" style="border-color: #43a047;">
+                    <div class="kpi-label">Total Amount</div>
+                    <div class="kpi-value text-success" id="total-amount">₹0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTENT -->
+        <div class="content-card">
+            <div class="p-3 border-bottom bg-light d-flex justify-content-between">
+                <div class="input-group" style="max-width: 300px;">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search invoices..." onkeyup="handleSearch()">
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 600px;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="sticky-top">
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Date</th>
+                            <th>Customer</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td colspan="5" class="text-center py-5 text-muted">
+                                <i class="bi bi-receipt fs-1 mb-2"></i><br>
+                                Click "Import Invoices" to fetch data
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- INVOICE DETAIL MODAL -->
+    <div class="modal fade" id="invoiceModal" tabindex="-1">
+        <div class="modal-dialog modal-xl">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title"><i class="bi bi-receipt me-2"></i>Invoice Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="invoiceDetails">
+                    <!-- Details will be populated here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allInvoices = [];
+        let stats = {};
+
+        // Load data on startup
+        document.addEventListener('DOMContentLoaded', () => {
+            const cached = localStorage.getItem('invoicesData');
+            if (cached) {
+                const data = JSON.parse(cached);
+                allInvoices = data.invoices;
+                stats = data.stats;
+                updateKPIs(stats);
+                renderInvoices(allInvoices);
+            }
+        });
+
+        function formatDate(tallyDate) {
+            if (!tallyDate || tallyDate.length !== 8) return tallyDate;
+            return `${tallyDate.slice(6,8)}/${tallyDate.slice(4,6)}/${tallyDate.slice(0,4)}`;
+        }
+
+        function formatDateForAPI(dateInput) {
+            return dateInput.replace(/-/g, '');
+        }
+
+        async function fetchData() {
+            const btn = document.querySelector('.btn-primary');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Importing...';
+
+            try {
+                const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+                const toDate = formatDateForAPI(document.getElementById('toDate').value);
+                const limit = document.getElementById('limitInput').value || null;
+
+                const res = await fetch('/api/invoices/fetch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ from_date: fromDate, to_date: toDate, limit: limit ? parseInt(limit) : null })
+                });
+                const data = await res.json();
+                
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                    return;
+                }
+
+                allInvoices = data.invoices;
+                stats = data.stats;
+                localStorage.setItem('invoicesData', JSON.stringify(data));
+                
+                updateKPIs(stats);
+                renderInvoices(allInvoices);
+
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        async function syncZoho() {
+            if (!confirm("This will sync the fetched invoices to Zoho Books. Continue?")) return;
+
+            const btn = document.querySelector('.btn-outline-primary');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+
+            try {
+                const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+                const toDate = formatDateForAPI(document.getElementById('toDate').value);
+                const limit = document.getElementById('limitInput').value || null;
+
+                const res = await fetch('/api/invoices/sync_zoho', { 
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ 
+                        invoices: null, 
+                        from_date: fromDate, 
+                        to_date: toDate,
+                        limit: limit ? parseInt(limit) : null
+                    })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    const total = data.stats.created + data.stats.failed;
+                    let msg = '✅ Zoho Sync Complete!\n\n';
+                    msg += `📊 Summary:\n`;
+                    msg += `  Total Invoices: ${total}\n`;
+                    msg += `  ✅ Successfully Created: ${data.stats.created}\n`;
+                    msg += `  ❌ Failed: ${data.stats.failed}\n\n`;
+                    
+                    if (data.stats.created > 0) {
+                        msg += `${data.stats.created} invoice(s) have been created in Zoho Books!\n\n`;
+                    }
+                    
+                    // Show detailed error messages
+                    if (data.stats.failed > 0 && data.stats.errors && data.stats.errors.length > 0) {
+                        msg += `⚠️ Failed Invoices:\n`;
+                        msg += `${'='.repeat(50)}\n`;
+                        data.stats.errors.forEach((err, idx) => {
+                            msg += `${idx + 1}. Invoice: ${err.invoice_number}\n`;
+                            msg += `   Customer: ${err.customer}\n`;
+                            msg += `   Error: ${err.error}\n\n`;
+                        });
+                    }
+                    
+                    alert(msg);
+                } else {
+                    alert('❌ Sync Error: ' + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error during Sync');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalText;
+            }
+        }
+
+        function updateKPIs(stats) {
+            if (!stats) return;
+            document.getElementById('total-invoices').innerText = stats.total_invoices || 0;
+            document.getElementById('total-amount').innerText = '₹' + (stats.total_amount || 0).toLocaleString();
+        }
+
+        function renderInvoices(invoices) {
+            const tbody = document.getElementById('tableBody');
+            if (!invoices || invoices.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" class="text-center py-4 text-muted">No Invoices Found</td></tr>';
+                return;
+            }
+
+            tbody.innerHTML = invoices.map((inv, idx) => `
+                <tr style="cursor: pointer;" onclick="showInvoiceDetails(${idx})">
+                    <td class="fw-medium text-primary">${inv.invoice_number}</td>
+                    <td>${formatDate(inv.date)}</td>
+                    <td>${inv.customer_name}</td>
+                    <td class="text-end fw-bold text-success">₹${inv.total_amount.toLocaleString()}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showInvoiceDetails(${idx})">
+                            <i class="bi bi-eye"></i> View
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showInvoiceDetails(idx) {
+            const inv = allInvoices[idx];
+            const modal = new bootstrap.Modal(document.getElementById('invoiceModal'));
+            
+            let html = `
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="text-primary border-bottom pb-2">Basic Information</h6>
+                        <table class="table table-sm">
+                            <tr><th width="40%">Invoice Number:</th><td>${inv.invoice_number}</td></tr>
+                            <tr><th>Date:</th><td>${formatDate(inv.date)}</td></tr>
+                            <tr><th>Customer:</th><td>${inv.customer_name}</td></tr>
+                            <tr><th>PO Number:</th><td>${inv.po_number || 'N/A'}</td></tr>
+                            <tr><th>Payment Terms:</th><td>${inv.payment_terms || 'N/A'}</td></tr>
+                            <tr><th>Sales Ledger:</th><td>${inv.sales_ledger || 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-primary border-bottom pb-2">E-Invoice Details</h6>
+                        <table class="table table-sm">
+                            <tr><th width="40%">IRN:</th><td class="text-break">${inv.irn || 'N/A'}</td></tr>
+                            <tr><th>IRN Ack No:</th><td>${inv.irn_ack_no || 'N/A'}</td></tr>
+                            <tr><th>IRN Ack Date:</th><td>${inv.irn_ack_date ? formatDate(inv.irn_ack_date) : 'N/A'}</td></tr>
+                        </table>
+                        ${inv.buyer_address && inv.buyer_address.length > 0 ? `
+                        <h6 class="text-primary border-bottom pb-2 mt-3">Buyer Address</h6>
+                        <p class="small">${inv.buyer_address.join('<br>')}</p>
+                        ` : ''}
+                    </div>
+                </div>
+
+                <h6 class="text-primary border-bottom pb-2 mt-3">Line Items</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Item</th>
+                                <th class="text-end">Qty</th>
+                                <th class="text-end">Rate</th>
+                                <th class="text-end">Discount</th>
+                                <th class="text-end">Amount</th>
+                                <th>Category</th>
+                                <th>Cost Centre</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${inv.line_items.map(item => `
+                                <tr>
+                                    <td>${item.item_name}</td>
+                                    <td class="text-end">${item.quantity}</td>
+                                    <td class="text-end">₹${item.rate.toLocaleString()}</td>
+                                    <td class="text-end">${item.discount || '0'}</td>
+                                    <td class="text-end fw-bold">₹${item.amount.toLocaleString()}</td>
+                                    <td><small>${item.category || '-'}</small></td>
+                                    <td><small>${item.cost_centre || '-'}</small></td>
+                                </tr>
+                            `).join('')}
+                            <tr class="table-light">
+                                <td colspan="4" class="text-end fw-bold">Subtotal:</td>
+                                <td class="text-end fw-bold">₹${inv.subtotal.toLocaleString()}</td>
+                                <td colspan="2"></td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+
+                ${inv.taxes && inv.taxes.length > 0 ? `
+                <h6 class="text-primary border-bottom pb-2 mt-3">Tax Breakdown</h6>
+                <div class="table-responsive">
+                    <table class="table table-sm table-bordered">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Tax Name</th>
+                                <th>Type</th>
+                                <th class="text-end">Rate</th>
+                                <th class="text-end">Amount</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            ${inv.taxes.map(tax => `
+                                <tr>
+                                    <td>${tax.tax_name}</td>
+                                    <td><span class="badge bg-info">${tax.tax_type}</span></td>
+                                    <td class="text-end">${tax.tax_rate ? tax.tax_rate + '%' : 'N/A'}</td>
+                                    <td class="text-end">₹${tax.tax_amount.toLocaleString()}</td>
+                                </tr>
+                            `).join('')}
+                            <tr class="table-light">
+                                <td colspan="3" class="text-end fw-bold">Tax Total:</td>
+                                <td class="text-end fw-bold">₹${inv.tax_total.toLocaleString()}</td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                ` : ''}
+
+                <div class="row mt-3">
+                    <div class="col-md-6">
+                        ${inv.narration ? `
+                        <h6 class="text-primary border-bottom pb-2">Narration</h6>
+                        <p class="small">${inv.narration}</p>
+                        ` : ''}
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card bg-light">
+                            <div class="card-body">
+                                <table class="table table-sm mb-0">
+                                    <tr><th>Subtotal:</th><td class="text-end">₹${inv.subtotal.toLocaleString()}</td></tr>
+                                    <tr><th>Tax Total:</th><td class="text-end">₹${inv.tax_total.toLocaleString()}</td></tr>
+                                    <tr><th>Rounding Off:</th><td class="text-end">₹${inv.rounding_off.toLocaleString()}</td></tr>
+                                    <tr class="table-primary"><th class="fs-5">Grand Total:</th><td class="text-end fs-5 fw-bold">₹${inv.total_amount.toLocaleString()}</td></tr>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('invoiceDetails').innerHTML = html;
+            modal.show();
+        }
+
+        function handleSearch() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allInvoices.filter(inv => 
+                inv.invoice_number.toLowerCase().includes(q) ||
+                inv.customer_name.toLowerCase().includes(q)
+            );
+            renderInvoices(filtered);
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,5 @@
+Status Code: 400
+Response: {
+  "code": 29009,
+  "message": "Purchase order cannot be created for a non-purchase item."
+}

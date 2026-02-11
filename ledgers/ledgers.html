@@ -1,0 +1,732 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Ledger Analysis - Material Design</title>
+    
+    <!-- Bootstrap 5 CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    
+    <!-- Bootstrap Icons -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    
+    <!-- Google Fonts - Roboto (Material Design) -->
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    
+    <style>
+        * {
+            font-family: 'Roboto', sans-serif;
+        }
+
+        body {
+            /* background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); */
+            min-height: 100vh;
+            padding: 20px;
+        }
+
+        /* Material Design Cards */
+        .material-card {
+            background: white;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1), 0 2px 4px rgba(0, 0, 0, 0.06);
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .material-card:hover {
+            box-shadow: 0 10px 15px rgba(0, 0, 0, 0.1), 0 4px 6px rgba(0, 0, 0, 0.05);
+            transform: translateY(-2px);
+        }
+
+        /* Header Card */
+        .header-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            margin-bottom: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .app-title {
+            font-size: 28px;
+            font-weight: 500;
+            color: #1a237e;
+            margin: 0;
+        }
+
+        .app-subtitle {
+            color: #5e35b1;
+            font-size: 14px;
+            margin-top: 4px;
+        }
+
+        /* Stats Cards - Flutter Style */
+        .stat-card {
+            background: white;
+            border-radius: 16px;
+            padding: 24px;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s;
+            border-left: 4px solid;
+        }
+
+        .stat-card:hover {
+            box-shadow: 0 8px 12px rgba(0, 0, 0, 0.15);
+            transform: translateY(-4px);
+        }
+
+        .stat-card-1 { border-left-color: #5e35b1; }
+        .stat-card-2 { border-left-color: #43a047; }
+        .stat-card-3 { border-left-color: #fb8c00; }
+        .stat-card-4 { border-left-color: #00acc1; }
+
+        .stat-icon {
+            width: 56px;
+            height: 56px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 28px;
+            margin-bottom: 12px;
+        }
+
+        .stat-icon-1 { background: linear-gradient(135deg, #5e35b1 0%, #7e57c2 100%); }
+        .stat-icon-2 { background: linear-gradient(135deg, #43a047 0%, #66bb6a 100%); }
+        .stat-icon-3 { background: linear-gradient(135deg, #fb8c00 0%, #ffa726 100%); }
+        .stat-icon-4 { background: linear-gradient(135deg, #00acc1 0%, #26c6da 100%); }
+
+        .stat-title {
+            font-size: 13px;
+            color: #616161;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            margin-bottom: 8px;
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 500;
+            color: #212121;
+        }
+
+        /* Material Button */
+        .btn-material {
+            background: linear-gradient(135deg, #5e35b1 0%, #7e57c2 100%);
+            color: white;
+            border: none;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            font-size: 14px;
+            box-shadow: 0 2px 4px rgba(94, 53, 177, 0.3);
+            transition: all 0.3s;
+        }
+
+        .btn-material:hover {
+            background: linear-gradient(135deg, #7e57c2 0%, #9575cd 100%);
+            box-shadow: 0 4px 8px rgba(94, 53, 177, 0.4);
+            transform: translateY(-2px);
+            color: white;
+        }
+
+        /* Search Bar - Material Design */
+        .search-card {
+            background: white;
+            border-radius: 12px;
+            padding: 16px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .search-input {
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            padding: 12px 16px;
+            font-size: 15px;
+            transition: all 0.3s;
+        }
+
+        .search-input:focus {
+            border-color: #5e35b1;
+            box-shadow: 0 0 0 3px rgba(94, 53, 177, 0.1);
+        }
+
+        /* Tabs - Material Style */
+        .material-tabs {
+            background: white;
+            border-radius: 12px;
+            padding: 8px;
+            box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .nav-pills .nav-link {
+            color: #616161;
+            border-radius: 8px;
+            font-weight: 500;
+            padding: 12px 24px;
+            transition: all 0.3s;
+        }
+
+        .nav-pills .nav-link:hover {
+            background: #f5f5f5;
+            color: #5e35b1;
+        }
+
+        .nav-pills .nav-link.active {
+            background: linear-gradient(135deg, #5e35b1 0%, #7e57c2 100%);
+            color: white;
+            box-shadow: 0 2px 4px rgba(94, 53, 177, 0.3);
+        }
+
+        /* Table - Material Design */
+        .table-card {
+            background: white;
+            border-radius: 12px;
+            overflow: hidden;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .table {
+            margin-bottom: 0;
+        }
+
+        .table thead {
+            background: linear-gradient(135deg, #5e35b1 0%, #7e57c2 100%);
+        }
+
+        .table thead th {
+            color: white;
+            font-weight: 500;
+            border: none;
+            padding: 16px;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .table tbody tr {
+            border-bottom: 1px solid #f5f5f5;
+            transition: background 0.2s;
+        }
+
+        .table tbody tr:hover {
+            background: #f5f5f5;
+            cursor: pointer;
+        }
+
+        .table tbody td {
+            padding: 16px;
+            vertical-align: middle;
+            color: #424242;
+        }
+
+        /* Material Badges */
+        .badge-material {
+            padding: 6px 16px;
+            border-radius: 16px;
+            font-weight: 500;
+            font-size: 12px;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+        }
+
+        .badge-customer {
+            background: linear-gradient(135deg, #43a047 0%, #66bb6a 100%);
+            color: white;
+        }
+
+        .badge-vendor {
+            background: linear-gradient(135deg, #fb8c00 0%, #ffa726 100%);
+            color: white;
+        }
+
+        .badge-other {
+            background: linear-gradient(135deg, #00acc1 0%, #26c6da 100%);
+            color: white;
+        }
+
+        /* Offcanvas - Material Style */
+        .offcanvas {
+            width: 480px !important;
+        }
+
+        .offcanvas-header {
+            background: linear-gradient(135deg, #5e35b1 0%, #7e57c2 100%);
+            color: white;
+            padding: 24px;
+        }
+
+        .offcanvas-title {
+            font-weight: 500;
+            font-size: 20px;
+        }
+
+        .btn-close {
+            filter: brightness(0) invert(1);
+        }
+
+        .offcanvas-body {
+            padding: 24px;
+        }
+
+        .detail-section {
+            margin-bottom: 24px;
+        }
+
+        .section-title {
+            font-size: 12px;
+            color: #5e35b1;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+
+        .detail-row {
+            display: flex;
+            padding: 12px 0;
+            border-bottom: 1px solid #f5f5f5;
+        }
+
+        .detail-label {
+            width: 140px;
+            color: #757575;
+            font-weight: 500;
+            font-size: 14px;
+        }
+
+        .detail-value {
+            flex: 1;
+            color: #212121;
+            font-size: 14px;
+            word-break: break-word;
+        }
+
+        .detail-value.highlight {
+            color: #5e35b1;
+            font-weight: 500;
+        }
+
+        /* Loading Animation */
+        .spinner-material {
+            width: 48px;
+            height: 48px;
+            border: 4px solid #e0e0e0;
+            border-top-color: #5e35b1;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            .offcanvas {
+                width: 100% !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid">
+        <!-- Header -->
+        <div class="header-card">
+            <div class="row align-items-center">
+                <div class="col-md-8">
+                    <div class="d-flex align-items-center">
+                        <div class="stat-icon stat-icon-1 me-3">
+                            <i class="bi bi-journal-text text-white"></i>
+                        </div>
+                        <div>
+                            <h1 class="app-title">Ledger Analysis</h1>
+                            <p class="app-subtitle mb-0">Tally Ledger Management System</p>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-4 text-end mt-3 mt-md-0">
+                    <button class="btn btn-material" onclick="fetchData()">
+                        <i class="bi bi-arrow-clockwise me-2"></i>
+                        Refresh Data
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Stats Cards -->
+        <div class="row g-4 mb-4">
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card stat-card-1">
+                    <div class="stat-icon stat-icon-1">
+                        <i class="bi bi-folder text-white"></i>
+                    </div>
+                    <div class="stat-title">Total Ledgers</div>
+                    <div class="stat-value" id="stat-total">0</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card stat-card-2">
+                    <div class="stat-icon stat-icon-2">
+                        <i class="bi bi-people text-white"></i>
+                    </div>
+                    <div class="stat-title">Customers</div>
+                    <div class="stat-value" id="stat-customers">0</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card stat-card-3">
+                    <div class="stat-icon stat-icon-3">
+                        <i class="bi bi-building text-white"></i>
+                    </div>
+                    <div class="stat-title">Vendors</div>
+                    <div class="stat-value" id="stat-vendors">0</div>
+                </div>
+            </div>
+            <div class="col-md-3 col-sm-6">
+                <div class="stat-card stat-card-4">
+                    <div class="stat-icon stat-icon-4">
+                        <i class="bi bi-card-list text-white"></i>
+                    </div>
+                    <div class="stat-title">Other Accounts</div>
+                    <div class="stat-value" id="stat-others">0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Search Bar -->
+        <div class="search-card mb-4">
+            <input 
+                type="text" 
+                class="form-control search-input" 
+                id="searchInput"
+                placeholder="🔍 Search ledgers by name..."
+                oninput="handleSearch()"
+            >
+        </div>
+
+        <!-- Tabs -->
+        <div class="material-tabs mb-4">
+            <ul class="nav nav-pills" id="ledgerTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active" onclick="switchTab('all', event)">
+                        <i class="bi bi-collection me-2"></i>All Ledgers
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" onclick="switchTab('customers', event)">
+                        <i class="bi bi-people me-2"></i>Customers
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" onclick="switchTab('vendors', event)">
+                        <i class="bi bi-building me-2"></i>Vendors
+                    </button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link" onclick="switchTab('others', event)">
+                        <i class="bi bi-card-checklist me-2"></i>Others
+                    </button>
+                </li>
+            </ul>
+        </div>
+
+        <!-- Table -->
+        <div class="table-card">
+            <div class="table-responsive">
+                <table class="table table-hover">
+                    <thead>
+                        <tr>
+                            <th onclick="sortTable(0)">
+                                <i class="bi bi-sort-alpha-down me-2"></i>Name
+                            </th>
+                            <th onclick="sortTable(1)">Type</th>
+                            <th onclick="sortTable(2)">Parent Group</th>
+                            <th onclick="sortTable(3)">GSTIN</th>
+                            <th onclick="sortTable(4)">State</th>
+                            <th onclick="sortTable(5)">Balance</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td colspan="6" class="text-center py-5">
+                                <div class="spinner-material mx-auto mb-3"></div>
+                                <h5 class="text-muted">Click "Refresh Data" to load ledgers</h5>
+                                <p class="text-muted small">Make sure Tally is running on port 9000</p>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detail Offcanvas -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="detailOffcanvas">
+        <div class="offcanvas-header">
+            <h5 class="offcanvas-title">Ledger Details</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
+        </div>
+        <div class="offcanvas-body" id="detailContent">
+            <!-- Details populated dynamically -->
+        </div>
+    </div>
+
+    <!-- Bootstrap 5 JS Bundle -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+
+    <script>
+        let allLedgers = [];
+        let filteredLedgers = [];
+        let currentTab = 'all';
+        let detailOffcanvas;
+
+        document.addEventListener('DOMContentLoaded', function() {
+            detailOffcanvas = new bootstrap.Offcanvas(document.getElementById('detailOffcanvas'));
+        });
+
+        async function fetchData() {
+            const btn = document.querySelector('.btn-material');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Loading...';
+
+            try {
+                const response = await fetch('http://localhost:5000/api/fetch');
+                const data = await response.json();
+
+                if (data.error) {
+                    showError(data.error);
+                    return;
+                }
+
+                allLedgers = data.ledgers;
+                updateStats(data.stats);
+                switchTab(currentTab);
+
+                btn.innerHTML = '<i class="bi bi-check-circle me-2"></i>Success!';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="bi bi-arrow-clockwise me-2"></i>Refresh Data';
+                    btn.disabled = false;
+                }, 1500);
+
+            } catch (error) {
+                showError('Cannot connect to server. Run: python api.py');
+                btn.innerHTML = '<i class="bi bi-x-circle me-2"></i>Error';
+                setTimeout(() => {
+                    btn.innerHTML = '<i class="bi bi-arrow-clockwise me-2"></i>Refresh Data';
+                    btn.disabled = false;
+                }, 1500);
+            }
+        }
+
+        function updateStats(stats) {
+            document.getElementById('stat-total').textContent = stats.total.toLocaleString();
+            document.getElementById('stat-customers').textContent = stats.customers.toLocaleString();
+            document.getElementById('stat-vendors').textContent = stats.vendors.toLocaleString();
+            document.getElementById('stat-others').textContent = stats.others.toLocaleString();
+        }
+
+        function switchTab(tab, event) {
+            currentTab = tab;
+            
+            document.querySelectorAll('.nav-link').forEach(t => t.classList.remove('active'));
+            if (event) event.target.classList.add('active');
+
+            if (tab === 'all') {
+                filteredLedgers = allLedgers;
+            } else if (tab === 'customers') {
+                filteredLedgers = allLedgers.filter(l => l.type === 'customer');
+            } else if (tab === 'vendors') {
+                filteredLedgers = allLedgers.filter(l => l.type === 'vendor');
+            } else if (tab === 'others') {
+                filteredLedgers = allLedgers.filter(l => l.type === 'other');
+            }
+
+            renderTable(filteredLedgers);
+        }
+
+        function handleSearch() {
+            const query = document.getElementById('searchInput').value.toLowerCase();
+            
+            if (!query) {
+                switchTab(currentTab);
+                return;
+            }
+
+            const results = filteredLedgers.filter(l => 
+                l.name.toLowerCase().includes(query)
+            );
+            
+            renderTable(results);
+        }
+
+        function renderTable(ledgers) {
+            const tbody = document.getElementById('tableBody');
+
+            if (!ledgers || ledgers.length === 0) {
+                tbody.innerHTML = `
+                    <tr>
+                        <td colspan="6" class="text-center py-5">
+                            <i class="bi bi-inbox" style="font-size: 48px; color: #bdbdbd;"></i>
+                            <h5 class="text-muted mt-3">No ledgers found</h5>
+                            <p class="text-muted small">Try changing your search or filter</p>
+                        </td>
+                    </tr>
+                `;
+                return;
+            }
+
+            tbody.innerHTML = ledgers.map(ledger => `
+                <tr onclick='showDetail(${JSON.stringify(ledger).replace(/'/g, "&apos;")})'>
+                    <td><strong>${ledger.name}</strong></td>
+                    <td>
+                        <span class="badge badge-material badge-${ledger.type}">
+                            ${ledger.type === 'customer' ? '<i class="bi bi-person-check me-1"></i>Customer' : 
+                              ledger.type === 'vendor' ? '<i class="bi bi-building me-1"></i>Vendor' : 
+                              '<i class="bi bi-card-list me-1"></i>Other'}
+                        </span>
+                    </td>
+                    <td>${ledger.parent || '-'}</td>
+                    <td><code>${ledger.gstin || '-'}</code></td>
+                    <td>${ledger.state || '-'}</td>
+                    <td><strong>${ledger.closing_balance || '-'}</strong></td>
+                </tr>
+            `).join('');
+        }
+
+        function showDetail(ledger) {
+            const content = document.getElementById('detailContent');
+
+            content.innerHTML = `
+                <div class="detail-section">
+                    <div class="section-title">
+                        <i class="bi bi-info-circle me-2"></i>Basic Information
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Name</span>
+                        <span class="detail-value highlight">${ledger.name}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Type</span>
+                        <span class="detail-value">
+                            <span class="badge badge-material badge-${ledger.type}">
+                                ${ledger.type === 'customer' ? 'Customer' : 
+                                  ledger.type === 'vendor' ? 'Vendor' : 'Other'}
+                            </span>
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Parent Group</span>
+                        <span class="detail-value">${ledger.parent || '-'}</span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="section-title">
+                        <i class="bi bi-receipt me-2"></i>Tax Information
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">GSTIN</span>
+                        <span class="detail-value"><code>${ledger.gstin || '-'}</code></span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">GST Reg Type</span>
+                        <span class="detail-value">${ledger.gst_reg_type || '-'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">PAN</span>
+                        <span class="detail-value"><code>${ledger.pan || '-'}</code></span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="section-title">
+                        <i class="bi bi-geo-alt me-2"></i>Contact Information
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Address</span>
+                        <span class="detail-value">${
+                            ledger.address_lines && ledger.address_lines.length > 0 
+                                ? ledger.address_lines.join('<br>') 
+                                : '-'
+                        }</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">State</span>
+                        <span class="detail-value">${ledger.state || '-'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Country</span>
+                        <span class="detail-value">${ledger.country || '-'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Pincode</span>
+                        <span class="detail-value">${ledger.pincode || '-'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Phone</span>
+                        <span class="detail-value">
+                            ${ledger.phone ? '<i class="bi bi-telephone me-2"></i>' + ledger.phone : '-'}
+                        </span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Email</span>
+                        <span class="detail-value">
+                            ${ledger.email ? '<i class="bi bi-envelope me-2"></i>' + ledger.email : '-'}
+                        </span>
+                    </div>
+                </div>
+
+                <div class="detail-section">
+                    <div class="section-title">
+                        <i class="bi bi-cash-stack me-2"></i>Financial Information
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Opening Balance</span>
+                        <span class="detail-value">${ledger.opening_balance || 'Not Available'}</span>
+                    </div>
+                    <div class="detail-row">
+                        <span class="detail-label">Closing Balance</span>
+                        <span class="detail-value highlight">${ledger.closing_balance || '-'}</span>
+                    </div>
+                </div>
+            `;
+
+            detailOffcanvas.show();
+        }
+
+        function sortTable(columnIndex) {
+            const tbody = document.getElementById('tableBody');
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+
+            rows.sort((a, b) => {
+                const aText = a.cells[columnIndex]?.textContent || '';
+                const bText = b.cells[columnIndex]?.textContent || '';
+                return aText.localeCompare(bText);
+            });
+
+            tbody.innerHTML = '';
+            rows.forEach(row => tbody.appendChild(row));
+        }
+
+        function showError(message) {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="6" class="text-center py-5">
+                        <div class="alert alert-danger d-inline-block">
+                            <i class="bi bi-exclamation-triangle me-2"></i>
+                            <strong>Error:</strong> ${message}
+                        </div>
+                    </td>
+                </tr>
+            `;
+        }
+    </script>
+</body>
+</html>

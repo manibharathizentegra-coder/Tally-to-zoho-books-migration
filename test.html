@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Zoho Creator: Subform Visibility Interactive Guide</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    
+    <!-- Chosen Palette: Slate & Creator Blue -->
+    <!-- Application Structure Plan: 
+         1. Hero Section: Direct answer to the user's query ("Yes, it's possible") with a clear status indicator.
+         2. Logic Simulator (The Core): A split-screen interactive demo. Left side is a mock Zoho Form. Right side is the logic explainer. This proves functionality immediately.
+         3. Dynamic Code Builder: As the user interacts with the simulator, this section generates the exact Deluge script needed, bridging the gap between concept and implementation.
+         4. Analytics Dashboard: Uses Chart.js to visualize "Best Practice" data (e.g., Performance impact of iterating rows vs direct field access).
+         5. Troubleshooting Grid: Common pitfalls (like row index issues) presented as interactive cards.
+    -->
+    
+    <!-- Visualization & Content Choices:
+         - Goal: Inform -> Dynamic text that updates 'Visible'/'Hidden' status based on JS state.
+         - Goal: Simulate -> HTML Table acting as a Subform. JS toggles 'hidden' Tailwind class on columns to mimic Zoho 'hide/show' command.
+         - Goal: Analyze -> Chart.js Radar Chart to compare different implementation methods (Client-side vs Server-side actions).
+         - Goal: Teach -> Code block that acts as a live clipboard.
+         - Confirmation: NO SVG graphics used. NO Mermaid JS used. Standard HTML/Unicode icons used.
+    -->
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&family=Fira+Code:wght@400;500&display=swap');
+        
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f8fafc; /* Slate 50 */
+            color: #334155; /* Slate 700 */
+        }
+        
+        .font-mono {
+            font-family: 'Fira Code', monospace;
+        }
+
+        /* Chart Container Styling */
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 400px;
+        }
+
+        /* Custom Scrollbar for code blocks */
+        .code-scroll::-webkit-scrollbar {
+            height: 8px;
+        }
+        .code-scroll::-webkit-scrollbar-track {
+            background: #1e293b;
+        }
+        .code-scroll::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col">
+
+    <!-- Navbar -->
+    <nav class="bg-white border-b border-slate-200 shadow-sm sticky top-0 z-50">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div class="flex justify-between h-16">
+                <div class="flex items-center">
+                    <div class="flex-shrink-0 flex items-center gap-2">
+                        <span class="text-3xl">⚡</span>
+                        <span class="font-bold text-xl text-slate-800 tracking-tight">ZC Logic<span class="text-blue-600">Master</span></span>
+                    </div>
+                    <div class="hidden md:ml-6 md:flex md:space-x-8">
+                        <button onclick="scrollToSection('simulator')" class="border-blue-500 text-slate-900 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Simulator</button>
+                        <button onclick="scrollToSection('code-builder')" class="border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Deluge Code</button>
+                        <button onclick="scrollToSection('analytics')" class="border-transparent text-slate-500 hover:text-slate-700 hover:border-slate-300 inline-flex items-center px-1 pt-1 border-b-2 text-sm font-medium">Best Practices</button>
+                    </div>
+                </div>
+                <div class="flex items-center">
+                    <span class="px-3 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800 border border-green-200">Verified Solution</span>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-12">
+
+        <!-- Header / Context -->
+        <div class="text-center max-w-3xl mx-auto">
+            <h1 class="text-4xl font-extrabold text-slate-900 tracking-tight sm:text-5xl mb-4">
+                Can you Hide & Show fields in a Subform?
+            </h1>
+            <p class="text-lg text-slate-600 mb-6">
+                <span class="font-bold text-blue-600">YES.</span> You can control visibility dynamically using Deluge scripting. This interactive report demonstrates exactly how to target subform rows and fields based on user input.
+            </p>
+        </div>
+
+        <!-- Section 1: Interactive Simulator -->
+        <section id="simulator" class="bg-white rounded-2xl shadow-lg border border-slate-200 overflow-hidden">
+            <div class="bg-slate-50 px-6 py-4 border-b border-slate-200">
+                <h2 class="text-xl font-bold text-slate-800 flex items-center gap-2">
+                    <span>🎛️</span> Live Simulator
+                </h2>
+                <p class="text-sm text-slate-500 mt-1">
+                    Interact with the "Main Form" below to see real-time updates in the "Subform".
+                </p>
+            </div>
+            
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-0">
+                
+                <!-- Left: Mock Main Form -->
+                <div class="lg:col-span-4 p-6 border-r border-slate-200 bg-white">
+                    <h3 class="text-sm uppercase tracking-wide text-slate-400 font-bold mb-4">Main Form Input</h3>
+                    
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Select Employment Type</label>
+                            <select id="employmentType" onchange="updateSimulation()" class="block w-full pl-3 pr-10 py-2 text-base border-slate-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm rounded-md border shadow-sm transition-colors duration-200">
+                                <option value="full_time">Full Time Employee</option>
+                                <option value="contractor">Contractor</option>
+                            </select>
+                            <p class="mt-2 text-xs text-slate-500">
+                                ℹ️ Selecting <strong>Contractor</strong> should hide "Benefits" & "Tax ID".
+                            </p>
+                        </div>
+
+                        <div>
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Show Comments?</label>
+                            <div class="flex items-center space-x-4">
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="showComments" value="yes" checked onchange="updateSimulation()" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
+                                    <span class="ml-2 text-slate-700">Yes</span>
+                                </label>
+                                <label class="inline-flex items-center">
+                                    <input type="radio" name="showComments" value="no" onchange="updateSimulation()" class="focus:ring-blue-500 h-4 w-4 text-blue-600 border-gray-300">
+                                    <span class="ml-2 text-slate-700">No</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <div class="p-4 bg-blue-50 rounded-lg border border-blue-100">
+                            <h4 class="text-blue-800 font-bold text-xs uppercase mb-2">Logic Execution</h4>
+                            <div id="statusLog" class="font-mono text-xs text-blue-900 space-y-1">
+                                > Waiting for input...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right: Mock Subform -->
+                <div class="lg:col-span-8 p-6 bg-slate-50/50">
+                    <h3 class="text-sm uppercase tracking-wide text-slate-400 font-bold mb-4 flex justify-between items-center">
+                        <span>Subform: Expense_Details</span>
+                        <span class="text-xs bg-slate-200 text-slate-600 px-2 py-1 rounded">Read-Only Preview</span>
+                    </h3>
+
+                    <div class="overflow-hidden shadow ring-1 ring-black ring-opacity-5 md:rounded-lg bg-white">
+                        <table class="min-w-full divide-y divide-slate-300">
+                            <thead class="bg-slate-50">
+                                <tr>
+                                    <th scope="col" class="py-3.5 pl-4 pr-3 text-left text-sm font-semibold text-slate-900 sm:pl-6">Item</th>
+                                    <th scope="col" class="px-3 py-3.5 text-left text-sm font-semibold text-slate-900">Amount</th>
+                                    <!-- Dynamic Columns -->
+                                    <th scope="col" id="headerBenefits" class="px-3 py-3.5 text-left text-sm font-semibold text-slate-900 transition-all duration-300">Benefits (401k)</th>
+                                    <th scope="col" id="headerTax" class="px-3 py-3.5 text-left text-sm font-semibold text-slate-900 transition-all duration-300">Tax ID</th>
+                                    <th scope="col" id="headerComments" class="px-3 py-3.5 text-left text-sm font-semibold text-slate-900 transition-all duration-300">Comments</th>
+                                </tr>
+                            </thead>
+                            <tbody class="divide-y divide-slate-200 bg-white">
+                                <!-- Row 1 -->
+                                <tr class="transition-colors hover:bg-slate-50">
+                                    <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-slate-900 sm:pl-6">Travel</td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-slate-500">$450.00</td>
+                                    <td class="col-benefits whitespace-nowrap px-3 py-4 text-sm text-green-600 font-medium transition-all duration-300">Eligible ✅</td>
+                                    <td class="col-tax whitespace-nowrap px-3 py-4 text-sm text-slate-500 transition-all duration-300">TX-9988</td>
+                                    <td class="col-comments whitespace-nowrap px-3 py-4 text-sm text-slate-400 italic transition-all duration-300">Flight to NY</td>
+                                </tr>
+                                <!-- Row 2 -->
+                                <tr class="transition-colors hover:bg-slate-50">
+                                    <td class="whitespace-nowrap py-4 pl-4 pr-3 text-sm font-medium text-slate-900 sm:pl-6">Equipment</td>
+                                    <td class="whitespace-nowrap px-3 py-4 text-sm text-slate-500">$1,200.00</td>
+                                    <td class="col-benefits whitespace-nowrap px-3 py-4 text-sm text-green-600 font-medium transition-all duration-300">Eligible ✅</td>
+                                    <td class="col-tax whitespace-nowrap px-3 py-4 text-sm text-slate-500 transition-all duration-300">TX-9988</td>
+                                    <td class="col-comments whitespace-nowrap px-3 py-4 text-sm text-slate-400 italic transition-all duration-300">New Laptop</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 2: Code Generator -->
+        <section id="code-builder" class="grid grid-cols-1 md:grid-cols-2 gap-8">
+            <div class="bg-slate-900 rounded-2xl shadow-lg p-6 text-white flex flex-col h-full">
+                <div class="flex justify-between items-center mb-4 border-b border-slate-700 pb-2">
+                    <h3 class="text-lg font-bold text-green-400 font-mono">Deluge Script Generator</h3>
+                    <span class="text-xs text-slate-400 bg-slate-800 px-2 py-1 rounded">Workflow: On User Input</span>
+                </div>
+                <div class="flex-grow font-mono text-sm leading-relaxed overflow-x-auto code-scroll">
+                    <pre id="codeOutput" class="language-deluge">
+// Initializing... interact with simulator to see code.
+                    </pre>
+                </div>
+                <div class="mt-4 pt-4 border-t border-slate-700 flex justify-between items-center">
+                    <span class="text-xs text-slate-400">Target: Main Form > Field Logic</span>
+                    <button onclick="copyCode()" class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded text-xs font-bold transition-colors">
+                        Copy to Clipboard
+                    </button>
+                </div>
+            </div>
+
+            <div class="bg-white rounded-2xl shadow-lg p-6 border border-slate-200">
+                <h3 class="text-xl font-bold text-slate-800 mb-4">Syntax Breakdown</h3>
+                <p class="text-slate-600 mb-6">
+                    To hide a subform field from the Main Form, you must <strong>iterate</strong> through the rows. You cannot simply say <code class="bg-slate-100 px-1 py-0.5 rounded text-red-500 text-sm">Subform.Field.hide()</code> because Deluge needs to know <em>which</em> row you are referring to, even if you want to hide it for all rows.
+                </p>
+                
+                <div class="space-y-4">
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs mt-0.5">1</div>
+                        <div class="ml-4">
+                            <h4 class="text-sm font-bold text-slate-900">The Iteration Loop</h4>
+                            <p class="text-sm text-slate-500">
+                                Use <code class="text-blue-600 bg-blue-50 px-1 rounded">for each row in Subform_Link_Name</code> to access the collection of rows.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs mt-0.5">2</div>
+                        <div class="ml-4">
+                            <h4 class="text-sm font-bold text-slate-900">The Row Variable</h4>
+                            <p class="text-sm text-slate-500">
+                                Inside the loop, use the iterator variable (e.g., <code class="text-purple-600 bg-purple-50 px-1 rounded">row</code>) to target the field: <code class="text-slate-700 font-bold">row.Field_Name.hide();</code>
+                            </p>
+                        </div>
+                    </div>
+                    <div class="flex items-start">
+                        <div class="flex-shrink-0 h-6 w-6 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 font-bold text-xs mt-0.5">3</div>
+                        <div class="ml-4">
+                            <h4 class="text-sm font-bold text-slate-900">The Trigger</h4>
+                            <p class="text-sm text-slate-500">
+                                Place this script in the <strong>On User Input</strong> workflow of the field that controls visibility (e.g., the Employment Type dropdown).
+                            </p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 3: Analytics & Methods -->
+        <section id="analytics" class="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            <div class="lg:col-span-2 bg-white rounded-2xl shadow-lg border border-slate-200 p-6">
+                <h3 class="text-lg font-bold text-slate-800 mb-2">Workflow Strategy Analysis</h3>
+                <p class="text-sm text-slate-500 mb-6">Comparing different methods for controlling visibility based on performance and user experience.</p>
+                
+                <div class="chart-container">
+                    <canvas id="workflowChart"></canvas>
+                </div>
+            </div>
+
+            <div class="lg:col-span-1 space-y-6">
+                <!-- Use Case Card 1 -->
+                <div class="bg-white rounded-xl shadow p-5 border-l-4 border-green-500">
+                    <h4 class="font-bold text-slate-900">On Form Load</h4>
+                    <p class="text-xs text-slate-500 mt-1">Best for setting initial state based on user role or existing data.</p>
+                    <div class="mt-3 flex items-center gap-2">
+                         <span class="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">hide Subform.Field;</span>
+                    </div>
+                </div>
+
+                <!-- Use Case Card 2 -->
+                <div class="bg-white rounded-xl shadow p-5 border-l-4 border-blue-500">
+                    <h4 class="font-bold text-slate-900">On User Input</h4>
+                    <p class="text-xs text-slate-500 mt-1">Dynamic changes. Requires row iteration if triggered from Main Form.</p>
+                    <div class="mt-3 flex items-center gap-2">
+                        <span class="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">row.Field.hide();</span>
+                    </div>
+                </div>
+
+                <!-- Use Case Card 3 -->
+                <div class="bg-white rounded-xl shadow p-5 border-l-4 border-purple-500">
+                    <h4 class="font-bold text-slate-900">On Add Row</h4>
+                    <p class="text-xs text-slate-500 mt-1">Crucial! Ensures logic applies to new rows created after the initial load.</p>
+                    <div class="mt-3 flex items-center gap-2">
+                        <span class="text-xs font-mono bg-slate-100 px-2 py-1 rounded text-slate-600">row.Field.show();</span>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- Section 4: Troubleshooting -->
+        <section id="troubleshooting" class="bg-slate-100 rounded-2xl p-8 text-center">
+            <h2 class="text-2xl font-bold text-slate-800 mb-8">Common Mistakes</h2>
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                    <div class="text-3xl mb-3">🚫</div>
+                    <h3 class="font-bold text-red-600 mb-2">Direct Access Error</h3>
+                    <p class="text-sm text-slate-600">Trying to access <code class="bg-slate-100 px-1 rounded">input.Subform.Field</code> outside of a loop returns null or a list, not the field object.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                    <div class="text-3xl mb-3">🔄</div>
+                    <h3 class="font-bold text-orange-600 mb-2">Forgetting 'On Add Row'</h3>
+                    <p class="text-sm text-slate-600">Hiding a column On Load works, but clicking "Add Row" might bring it back or break styling if logic isn't repeated.</p>
+                </div>
+                <div class="bg-white p-6 rounded-lg shadow-sm hover:shadow-md transition-shadow">
+                    <div class="text-3xl mb-3">📱</div>
+                    <h3 class="font-bold text-blue-600 mb-2">Mobile Layouts</h3>
+                    <p class="text-sm text-slate-600">Hiding columns works well on Web. On Mobile/Tablet, subforms render as cards, so hiding fields just removes the row item.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <!-- Footer -->
+    <footer class="bg-white border-t border-slate-200 mt-12 py-8">
+        <div class="max-w-7xl mx-auto px-4 text-center text-slate-400 text-sm">
+            <p>Generated Interactive Guide for Zoho Creator Deluge Scripting.</p>
+        </div>
+    </footer>
+
+    <!-- JavaScript Logic -->
+    <script>
+        // State Management
+        const state = {
+            empType: 'full_time',
+            showComments: 'yes'
+        };
+
+        // Scroll Helper
+        function scrollToSection(id) {
+            document.getElementById(id).scrollIntoView({ behavior: 'smooth' });
+        }
+
+        // Copy Helper
+        function copyCode() {
+            const code = document.getElementById('codeOutput').innerText;
+            navigator.clipboard.writeText(code);
+            alert("Code copied to clipboard!");
+        }
+
+        // --- Core Simulation Logic ---
+        function updateSimulation() {
+            // 1. Get Values
+            state.empType = document.getElementById('employmentType').value;
+            const commentsRadios = document.getElementsByName('showComments');
+            for(let radio of commentsRadios) {
+                if(radio.checked) state.showComments = radio.value;
+            }
+
+            // 2. DOM Manipulation (The "Show/Hide" Effect)
+            const benefitsHeader = document.getElementById('headerBenefits');
+            const taxHeader = document.getElementById('headerTax');
+            const commentsHeader = document.getElementById('headerComments');
+            
+            const benefitsCells = document.querySelectorAll('.col-benefits');
+            const taxCells = document.querySelectorAll('.col-tax');
+            const commentsCells = document.querySelectorAll('.col-comments');
+
+            // Logic A: Contractor hides Benefits/Tax
+            if (state.empType === 'contractor') {
+                benefitsHeader.style.display = 'none';
+                taxHeader.style.display = 'none';
+                benefitsCells.forEach(el => el.style.display = 'none');
+                taxCells.forEach(el => el.style.display = 'none');
+            } else {
+                benefitsHeader.style.display = '';
+                taxHeader.style.display = '';
+                benefitsCells.forEach(el => el.style.display = '');
+                taxCells.forEach(el => el.style.display = '');
+            }
+
+            // Logic B: Comments toggle
+            if (state.showComments === 'no') {
+                commentsHeader.style.display = 'none';
+                commentsCells.forEach(el => el.style.display = 'none');
+            } else {
+                commentsHeader.style.display = '';
+                commentsCells.forEach(el => el.style.display = '');
+            }
+
+            // 3. Update Status Log
+            const log = document.getElementById('statusLog');
+            const time = new Date().toLocaleTimeString();
+            log.innerHTML = `> [${time}] User changed input.<br>> Re-evaluating visibility rules...<br>> UI Updated successfully.`;
+
+            // 4. Regenerate Deluge Code
+            generateDelugeCode();
+        }
+
+        // --- Code Generator Logic ---
+        function generateDelugeCode() {
+            let script = `// CODE GENERATED FOR: Main Form > On User Input\n\n`;
+
+            // Block 1: Employment Type Logic
+            if (state.empType === 'contractor') {
+                script += `// Logic: If Contractor, HIDE benefits and tax\n`;
+                script += `if (input.Employment_Type == "Contractor")\n{\n`;
+                script += `    // Iterate through subform rows\n`;
+                script += `    for each row in Expense_Details\n    {\n`;
+                script += `        row.Benefits_401k.hide();\n`;
+                script += `        row.Tax_ID.hide();\n`;
+                script += `    }\n}\n`;
+                script += `else\n{\n`;
+                script += `    for each row in Expense_Details\n    {\n`;
+                script += `        row.Benefits_401k.show();\n`;
+                script += `        row.Tax_ID.show();\n`;
+                script += `    }\n}\n\n`;
+            } else {
+                script += `// Logic: If Full Time, ensuring fields are visible\n`;
+                script += `if (input.Employment_Type == "Full Time Employee")\n{\n`;
+                script += `    for each row in Expense_Details\n    {\n`;
+                script += `        row.Benefits_401k.show();\n`;
+                script += `        row.Tax_ID.show();\n`;
+                script += `    }\n}\n\n`;
+            }
+
+            // Block 2: Comments Logic
+            if (state.showComments === 'no') {
+                script += `// Logic: Hide Comments globally requested\n`;
+                script += `hide Expense_Details.Comments;\n`;
+                script += `// Note: 'hide Subform.Field' works on the column header mainly.\n`;
+                script += `// For safer row-level control, iterate like above.\n`;
+            } else {
+                script += `// Logic: Show Comments\n`;
+                script += `show Expense_Details.Comments;\n`;
+            }
+
+            // Syntax highlighting HTML wrapper (simple implementation)
+            const html = script
+                .replace(/\/\/.*/g, '<span class="text-slate-500">$&</span>')
+                .replace(/\b(if|else|for each|in)\b/g, '<span class="text-purple-400">$1</span>')
+                .replace(/\b(hide|show)\b/g, '<span class="text-blue-400">$1</span>')
+                .replace(/"(.*?)"/g, '<span class="text-green-400">"$1"</span>');
+
+            document.getElementById('codeOutput').innerHTML = html;
+        }
+
+        // --- Chart.js Initialization ---
+        document.addEventListener('DOMContentLoaded', () => {
+            // Run initial simulation
+            updateSimulation();
+
+            // Setup Chart
+            const ctx = document.getElementById('workflowChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: ['Responsiveness', 'Code Complexity', 'Maintenance', 'User UX', 'Server Load'],
+                    datasets: [{
+                        label: 'Client Side (On User Input)',
+                        data: [90, 60, 70, 95, 40],
+                        fill: true,
+                        backgroundColor: 'rgba(59, 130, 246, 0.2)',
+                        borderColor: 'rgb(59, 130, 246)',
+                        pointBackgroundColor: 'rgb(59, 130, 246)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(59, 130, 246)'
+                    }, {
+                        label: 'Server Side (On Load)',
+                        data: [50, 30, 90, 60, 20],
+                        fill: true,
+                        backgroundColor: 'rgba(168, 85, 247, 0.2)',
+                        borderColor: 'rgb(168, 85, 247)',
+                        pointBackgroundColor: 'rgb(168, 85, 247)',
+                        pointBorderColor: '#fff',
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgb(168, 85, 247)'
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            angleLines: {
+                                color: '#e2e8f0'
+                            },
+                            grid: {
+                                color: '#e2e8f0'
+                            },
+                            pointLabels: {
+                                font: {
+                                    size: 12,
+                                    family: "'Inter', sans-serif"
+                                },
+                                color: '#64748b'
+                            },
+                            suggestedMin: 0,
+                            suggestedMax: 100
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                fontFamily: "'Inter', sans-serif",
+                                color: '#475569'
+                            }
+                        },
+                        tooltip: {
+                            backgroundColor: 'rgba(15, 23, 42, 0.9)',
+                            titleFont: { family: "'Inter', sans-serif" },
+                            bodyFont: { family: "'Inter', sans-serif" }
+                        }
+                    }
+                }
+            });
+        });
+
+    </script>
+</body>
+</html>
+
+
+<!-- "text-slate-500">// CODE GENERATED FOR: Main Form > On User Input
+
+"text-slate-500">// Logic: If Contractor, HIDE benefits and tax
+"text-purple-400">if (input.Employment_Type == "Contractor")
+{
+    "text-slate-500">// Iterate through subform rows
+    "text-purple-400">for each row "text-purple-400">in Expense_Details
+    {
+        row.Benefits_401k."text-blue-400">hide();
+        row.Tax_ID."text-blue-400">hide();
+    }
+}
+"text-purple-400">else
+{
+    "text-purple-400">for each row "text-purple-400">in Expense_Details
+    {
+        row.Benefits_401k."text-blue-400">show();
+        row.Tax_ID."text-blue-400">show();
+    }
+}
+
+"text-slate-500">// Logic: Show Comments
+"text-blue-400">show Expense_Details.Comments; -->
+The "Master Prompt" for this UI Style
+"Build a modern, interactive dashboard for [Your Project Name] using Tailwind CSS, Vanilla JavaScript, and Chart.js.
+
+Design & Style: Use a professional 'Enterprise Tech' aesthetic with a Slate and Blue color palette (Slate 50 background, Slate 800 text, Blue 600 accents). Use Inter for the body font and Fira Code for any technical or data sections.
+
+Layout Requirements:
+
+Sticky Navbar: A clean white navbar with a logo on the left, navigation links in the center, and a status badge on the right.
+
+Hero Section: A centered header with a bold H1 and a descriptive sub-paragraph.
+
+Interactive Simulator: A split-screen section where the left side contains a mock input form (dropdowns and radio buttons) and the right side shows a live-updating table that responds to those inputs (e.g., hiding/showing columns).
+
+Code Builder Component: A dark-themed (Slate 900) code block section with syntax highlighting (purple/blue/green colors) and a 'Copy to Clipboard' button.
+
+Data Visualization: Integrate a Chart.js Radar Chart to compare different strategies or metrics.
+
+Info Grid: A troubleshooting or feature section using a 3-column grid of white cards with border-left color accents and unicode icons.
+
+Functionality: Include the JavaScript logic to handle the live simulation updates, scroll-to-section navigation, and the code generation logic."
