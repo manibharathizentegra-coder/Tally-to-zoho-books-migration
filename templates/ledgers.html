@@ -67,6 +67,11 @@
                     </a>
                 </li>
                 <li class="nav-item me-3">
+                    <a class="nav-link" href="/receipts">
+                        <i class="bi bi-cash-coin me-1"></i> Payment Received
+                    </a>
+                </li>
+                <li class="nav-item me-3">
                     <a class="nav-link" href="/sales_orders">
                         <i class="bi bi-cart-check me-1"></i> Sales Orders
                     </a>
@@ -140,6 +145,9 @@
                     <button class="nav-link" onclick="switchTab('vendors')">Vendors</button>
                 </li>
                 <li class="nav-item">
+                    <button class="nav-link" onclick="switchTab('others')">Others</button>
+                </li>
+                <li class="nav-item">
                     <button class="nav-link" onclick="switchTab('groups')">Groups Structure</button>
                 </li>
                 <li class="nav-item">
@@ -151,6 +159,36 @@
             </ul>
 
             <!-- TABS CONTENT -->
+            <!-- Controls -->
+            <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
+                <div class="input-group" style="max-width: 300px;">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search..." onkeyup="handleSearch()">
+                </div>
+                
+                <!-- Buttons -->
+                <div class="d-flex gap-2">
+                    <button id="btnFieldMapping" class="btn btn-outline-dark btn-sm d-none" onclick="openMappingModal()">
+                        <i class="bi bi-diagram-3 me-2"></i> Field Mapping
+                    </button>
+                    <button id="btnGroupSync" class="btn btn-outline-success btn-sm d-none" onclick="executeGroupSync()">
+                        <i class="bi bi-cloud-upload me-2"></i> Sync Mapped Groups
+                    </button>
+                    <!-- Customers Tab -->
+                    <button id="btnSyncCustomers" class="btn btn-info btn-sm d-none text-white" onclick="syncContacts('customer')">
+                        <i class="bi bi-people me-2"></i> Sync Customers → Zoho
+                    </button>
+                    <!-- Vendors Tab -->
+                    <button id="btnSyncVendors" class="btn btn-warning btn-sm d-none" onclick="syncContacts('vendor')">
+                        <i class="bi bi-building me-2"></i> Sync Vendors → Zoho
+                    </button>
+                    <!-- Cost Centres Tab -->
+                    <button id="btnSyncReportingTags" class="btn btn-primary btn-sm d-none" onclick="syncReportingTags()">
+                        <i class="bi bi-tags me-2"></i> Sync Reporting Tags → Zoho
+                    </button>
+                </div>
+            </div>
+
             <div id="ledgersTableContainer">
                 <!-- Table Content -->
                 <div class="table-responsive" style="max-height: 600px;">
@@ -190,15 +228,10 @@
                     <thead class="table-light"><tr><th>Name</th><th>Category</th><th>Parent</th></tr></thead>
                     <tbody id="costCentresBody"></tbody>
                 </table>
+                <!-- Reporting Tags Sync Results -->
+                <div id="reportingTagsResultPanel" class="p-3"></div>
             </div>
             
-            <!-- Controls -->
-            <div class="p-3 border-bottom bg-light d-flex justify-content-between">
-                <div class="input-group" style="max-width: 300px;">
-                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search..." onkeyup="handleSearch()">
-                </div>
-            </div>
         </div>
     </div>
 
@@ -210,6 +243,41 @@
         </div>
         <div class="offcanvas-body" id="offcanvasBody">
             <!-- Details loaded here -->
+        </div>
+    </div>
+
+    <!-- FIELD MAPPING MODAL -->
+    <div class="modal fade" id="mappingModal" tabindex="-1">
+        <div class="modal-dialog modal-lg modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold">Map Tally Groups to Zoho Account Types</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body p-0">
+                    <div class="alert alert-light border-bottom mb-0 small text-muted">
+                        <i class="bi bi-info-circle me-1"></i> Map each distinct Tally Parent Group to a valid Zoho Books Account Type.
+                    </div>
+                    <table class="table table-striped table-hover mb-0 align-middle">
+                        <thead class="table-light sticky-top">
+                            <tr>
+                                <th style="width: 50%;">Tally Parent Group</th>
+                                <th style="width: 50%;">Zoho Books Account Type</th>
+                            </tr>
+                        </thead>
+                        <tbody id="mappingTableBody">
+                            <!-- Rows loaded via JS -->
+                        </tbody>
+                    </table>
+                </div>
+                <div class="modal-footer bg-light">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                    <!-- Single Save Button as requested -->
+                    <button type="button" class="btn btn-primary" onclick="saveMapping()">
+                        <i class="bi bi-save me-2"></i> Save Mapping
+                    </button>
+                </div>
+            </div>
         </div>
     </div>
 
@@ -284,18 +352,47 @@
         function switchTab(tab) {
             currentTab = tab;
             
-            // Update UI buttons
-            document.querySelectorAll('.nav-link').forEach(btn => btn.classList.remove('active'));
-            if (event && event.target) {
+            // Update UI buttons - only within nav-pills
+            const buttons = document.querySelectorAll('.nav-pills .nav-link');
+            buttons.forEach(btn => btn.classList.remove('active'));
+
+            // Check if triggered by click event on a valid nav-link
+            if (event && event.type === 'click' && event.target.classList.contains('nav-link')) {
                 event.target.classList.add('active');
             } else {
-                 const buttons = document.querySelectorAll('.nav-link');
                  if (tab === 'all') buttons[0].classList.add('active');
                  else if (tab === 'customers') buttons[1].classList.add('active');
                  else if (tab === 'vendors') buttons[2].classList.add('active');
-                 else if (tab === 'groups') buttons[3].classList.add('active');
-                 else if (tab === 'cost-categories') buttons[4].classList.add('active');
-                 else if (tab === 'cost-centres') buttons[5].classList.add('active');
+                 else if (tab === 'others') buttons[3].classList.add('active');
+                 else if (tab === 'groups') buttons[4].classList.add('active');
+                 else if (tab === 'cost-categories') buttons[5].classList.add('active');
+                 else if (tab === 'cost-centres') buttons[6].classList.add('active');
+            }
+
+            // Toggle all action buttons — hide all first, then show per-tab
+            const btnMapping      = document.getElementById('btnFieldMapping');
+            const btnGroupSync    = document.getElementById('btnGroupSync');
+            const btnReportingTags = document.getElementById('btnSyncReportingTags');
+            const btnSyncCustomers = document.getElementById('btnSyncCustomers');
+            const btnSyncVendors   = document.getElementById('btnSyncVendors');
+            
+            // Hide all
+            [btnMapping, btnGroupSync, btnReportingTags, btnSyncCustomers, btnSyncVendors]
+                .forEach(b => { if (b) b.classList.add('d-none'); });
+
+            // Show per tab
+            if (tab === 'others') {
+                if (btnMapping)   btnMapping.classList.remove('d-none');
+                if (btnGroupSync) btnGroupSync.classList.remove('d-none');
+            }
+            if (tab === 'customers') {
+                if (btnSyncCustomers) btnSyncCustomers.classList.remove('d-none');
+            }
+            if (tab === 'vendors') {
+                if (btnSyncVendors) btnSyncVendors.classList.remove('d-none');
+            }
+            if (tab === 'cost-centres') {
+                if (btnReportingTags) btnReportingTags.classList.remove('d-none');
             }
 
             const tableContainer = document.getElementById('ledgersTableContainer');
@@ -479,6 +576,22 @@
 
             // Generate Address Lines HTML
             const addressHtml = (ledger.address_lines || []).map(line => `<div>${line}</div>`).join('') || '<div class="text-muted">No address provided</div>';
+            
+            // Determine Badge Text & Color
+            let typeBadge = '';
+            let typeLabel = '';
+            
+            if (ledger.type === 'customer') {
+                typeBadge = 'bg-primary';
+                typeLabel = 'CUSTOMER';
+            } else if (ledger.type === 'vendor') {
+                typeBadge = 'bg-success';
+                typeLabel = 'VENDOR';
+            } else {
+                typeBadge = 'bg-secondary';
+                // User Request: Show "Under Name" (Parent Group) instead of "OTHER"
+                typeLabel = ledger.parent.toUpperCase(); 
+            }
 
             const html = `
                 <div class="mb-4">
@@ -486,9 +599,7 @@
                     <div class="mb-2"><span class="fw-bold">Name:</span> ${ledger.name}</div>
                     <div class="mb-2"><span class="fw-bold">Group:</span> ${ledger.parent}</div>
                     <div class="mb-2"><span class="fw-bold">Type:</span> 
-                        <span class="badge ${ledger.type === 'customer' ? 'bg-primary' : (ledger.type === 'vendor' ? 'bg-success' : 'bg-secondary')}">
-                            ${ledger.type ? ledger.type.toUpperCase() : 'OTHER'}
-                        </span>
+                        <span class="badge ${typeBadge}">${typeLabel}</span>
                     </div>
                 </div>
 
@@ -590,6 +701,916 @@
             const filtered = list.filter(i => i.name.toLowerCase().includes(q));
             renderTable(filtered);
         }
+        // -----------------------------------------------------
+        // FIELD MAPPING LOGIC
+        // -----------------------------------------------------
+
+        // -----------------------------------------------------
+        // CUSTOM DROPDOWN LOGIC
+        // -----------------------------------------------------
+        
+        let currentMapping = {}; // Stores mapping: { 'Tally Group Name': 'Zoho Account Type' }
+
+        function selectZohoType(element) {
+            event.preventDefault();
+            const val = element.getAttribute('data-val');
+            const dropdown = element.closest('.dropdown');
+            
+            // Update hidden input
+            const hiddenInput = dropdown.querySelector('.mapping-select');
+            hiddenInput.value = val;
+            
+            // Update Button Text
+            const btn = dropdown.querySelector('.dropdown-toggle span');
+            if (!val) {
+                // CLEAR selection
+                btn.innerText = '-- Select Account Type --';
+                btn.classList.remove('text-dark', 'fw-medium');
+                btn.classList.add('text-muted');
+            } else {
+                btn.innerText = val;
+                btn.classList.remove('text-muted');
+                btn.classList.add('text-dark', 'fw-medium');
+            }
+            
+            // Update Active State
+            dropdown.querySelectorAll('.dropdown-item').forEach(item => item.classList.remove('active'));
+            if (val) element.classList.add('active');
+        }        
+
+        function filterZohoTypes(input) {
+            const filter = input.value.toLowerCase();
+            const items = input.closest('.dropdown-menu').querySelectorAll('.dropdown-item');
+            
+            items.forEach(item => {
+                const text = item.innerText.toLowerCase();
+                const li = item.parentElement;
+                if (text.includes(filter)) {
+                    li.style.display = "";
+                } else {
+                    li.style.display = "none";
+                }
+            });
+        }
+
+        // -----------------------------------------------------
+        // TREE VIEW MAPPING LOGIC
+        // -----------------------------------------------------
+
+        function buildGroupTree(groups) {
+            const map = {};
+            const roots = [];
+            
+            // 1. Initialize Map
+            groups.forEach(g => {
+                map[g.name] = { ...g, children: [] };
+            });
+
+            // 2. Build Hierarchy
+            groups.forEach(g => {
+                if (g.parent && map[g.parent]) {
+                    map[g.parent].children.push(map[g.name]);
+                } else {
+                    roots.push(map[g.name]);
+                }
+            });
+            
+            return roots;
+        }
+
+        // Helper to Calculate Recursive Counts (Groups + Ledgers)
+        function calculateRecursiveCounts(node, ledgerCounts) {
+            let count = ledgerCounts[node.name] || 0; // Start with direct ledgers
+            
+            node.children.forEach(child => {
+                count += 1; // Count the child group itself
+                count += calculateRecursiveCounts(child, ledgerCounts); // Add child's contents
+            });
+            
+            node.totalCount = count;
+            return count;
+        }
+
+        // Recursive Row Renderer
+        function renderTreeRows(nodes, level, zohoTypesHtml, ledgerCounts) {
+            let html = '';
+            
+            nodes.forEach(node => {
+                const savedVal = currentMapping[node.name] || "";
+                const btnText = savedVal || "-- Select Account Type --";
+                const btnClass = savedVal ? "text-dark fw-medium" : "text-muted";
+                const padding = 10 + (level * 25); // Indentation
+                // Use the pre-calculated total count
+                const count = node.totalCount || 0;
+                
+                // Icon based on children
+                const icon = node.children.length > 0 ? '<i class="bi bi-folder2-open text-warning me-2"></i>' : '<i class="bi bi-folder2 text-secondary me-2"></i>';
+                
+                // Total Count Badge
+                const badge = count > 0 ? `<span class="badge bg-primary-subtle text-primary border border-primary-subtle ms-2 rounded-pill">Total: ${count}</span>` : '';
+
+                // Generate Dropdown (Reuse existing logic)
+                const ddHtml = `
+                    <div class="dropdown">
+                        <button class="btn btn-sm btn-outline-secondary bg-white w-100 text-start d-flex justify-content-between align-items-center dropdown-toggle" 
+                                type="button" data-bs-toggle="dropdown">
+                            <span class="${btnClass} text-truncate small">${btnText}</span>
+                        </button>
+                        <ul class="dropdown-menu w-100 shadow" style="max-height: 200px; overflow-y: auto;">
+                             <li class="p-2 sticky-top bg-white border-bottom">
+                                <input type="text" class="form-control form-control-sm" 
+                                       placeholder="Search..." onclick="event.stopPropagation()" onkeyup="filterZohoTypes(this)">
+                            </li>
+                            ${zohoTypesHtml.replace(new RegExp(`data-val="${savedVal}"`, 'g'), `data-val="${savedVal}" class="dropdown-item active"`)}
+                        </ul>
+                        <input type="hidden" class="mapping-select" data-parent="${node.name}" value="${savedVal}">
+                    </div>
+                `;
+
+                html += `
+                    <tr>
+                        <td style="padding-left: ${padding}px; vertical-align: middle;">
+                            <div class="d-flex align-items-center">
+                                ${icon} 
+                                <span class="fw-medium text-dark">${node.name}</span>
+                                ${badge}
+                            </div>
+                        </td>
+                        <td class="text-muted small align-middle">${node.parent || '-'}</td>
+                        <td class="align-middle">
+                            ${ddHtml}
+                        </td>
+                    </tr>
+                `;
+
+                // Recurse for children
+                if (node.children.length > 0) {
+                    html += renderTreeRows(node.children, level + 1, zohoTypesHtml, ledgerCounts);
+                }
+            });
+            
+            return html;
+        }
+
+        async function openMappingModal() {
+            // Fetch Saved Mapping from Backend
+            try {
+                const res = await fetch('/api/ledgers/get_mapping');
+                if (res.ok) {
+                    const data = await res.json();
+                    // Merge with current in-memory mapping or overwrite
+                    // Backend is source of truth for persistent mapping
+                    if (data && !data.status) { 
+                        currentMapping = { ...currentMapping, ...data };
+                    }
+                }
+            } catch (e) {
+                console.error("Failed to fetch saved mapping:", e);
+            }
+
+            // Zoho Books Account Types (Standard List)
+            const ZOHO_TYPES = [
+                "Other Asset", "Other Current Asset", "Cash", "Bank", "Fixed Asset", "Stock",
+                "Payment Clearing", "Other Current Liability", "Credit Card", "Long Term Liability",
+                "Other Liability", "Overseas Account", "Equity", "Income", "Other Income",
+                "Expense", "Cost of Goods Sold", "Other Expense"
+            ].sort();
+            
+            // Pre-generate Options HTML for performance
+            // First item is always a "Clear" option so user can undo a wrong selection
+            const clearOption = `
+                <li>
+                    <a class="dropdown-item text-danger" href="#" data-val="" onclick="selectZohoType(this)">
+                        <i class="bi bi-x-circle me-1"></i> Clear Selection
+                    </a>
+                </li>
+                <li><hr class="dropdown-divider my-1"></li>
+            `;
+            const optionsTemplate = clearOption + ZOHO_TYPES.map(t => `
+                <li>
+                    <a class="dropdown-item" href="#" data-val="${t}" onclick="selectZohoType(this)">${t}</a>
+                </li>
+            `).join('');
+
+            // Build Tree
+            if (!allData.groups || allData.groups.length === 0) {
+                if(!allData.others || allData.others.length === 0) {
+                     alert("No Groups Data Loaded. Please click 'Fetch from Tally / DB' first.");
+                     return;
+                }
+            }
+
+            // Calculate Ledger Counts (Direct)
+            const ledgerCounts = {};
+            if (allData.ledgers) {
+                allData.ledgers.forEach(l => {
+                    const p = l.parent;
+                    ledgerCounts[p] = (ledgerCounts[p] || 0) + 1;
+                });
+            }
+
+            // Build Full Tree
+            const treeRoot = buildGroupTree(allData.groups);
+            
+            // Calculate Total Recursive Counts
+            treeRoot.forEach(root => calculateRecursiveCounts(root, ledgerCounts));
+
+            const tbody = document.getElementById('mappingTableBody');
+            
+            // Update Table Header
+            const thead = document.querySelector('#mappingModal thead tr');
+            if (thead) {
+                thead.innerHTML = `
+                    <th style="width: 45%;">Tally Group Hierarchy</th>
+                    <th style="width: 25%;">Parent Group</th>
+                    <th style="width: 30%;">Zoho Books Account Type</th>
+                `;
+            }
+
+            tbody.innerHTML = '';
+            
+            if (treeRoot.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center text-muted">No Groups found</td></tr>';
+            } else {
+                tbody.innerHTML = renderTreeRows(treeRoot, 0, optionsTemplate, ledgerCounts);
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById('mappingModal'));
+            modal.show();
+        }
+
+        async function saveMapping() {
+           const selects = document.querySelectorAll('.mapping-select');
+           const mapping = {};
+           let count = 0;
+           
+           selects.forEach(sel => {
+               const parent = sel.getAttribute('data-parent');
+               const val = sel.value;
+               if (val) {
+                   mapping[parent] = val;
+                   count++;
+               }
+           });
+           
+           // Persist locally
+           currentMapping = mapping;
+           
+           if (count === 0) {
+              alert("Please select at least one mapping first!");
+              return;
+           }
+           
+           // Call API to SAVE
+           const btn = event.target.closest('button');
+           const originalText = btn.innerHTML;
+           btn.disabled = true;
+           btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
+
+           try {
+               const res = await fetch('/api/ledgers/save_mapping', { 
+                   method: 'POST',
+                   headers: {'Content-Type': 'application/json'},
+                   body: JSON.stringify({ mapping: mapping }) 
+               });
+               const data = await res.json();
+               
+               if (data.status === 'success') {
+                   alert('✅ Mapping Saved Successfully!');
+                   const el = document.getElementById('mappingModal');
+                   const modal = bootstrap.Modal.getInstance(el);
+                   modal.hide();
+               } else {
+                   alert('❌ Error Saving: ' + data.message);
+               }
+           } catch (err) {
+               console.error(err);
+               alert('Connection Error');
+           } finally {
+               if (btn) {
+                   btn.disabled = false;
+                   btn.innerHTML = originalText;
+               }
+           }
+        }
+
+        // Zoho Account Types for standalone creation
+        const ZOHO_TYPES_STANDALONE = [
+            "Other Asset", "Other Current Asset", "Cash", "Bank", "Fixed Asset", "Stock",
+            "Payment Clearing", "Other Current Liability", "Credit Card", "Long Term Liability",
+            "Other Liability", "Overseas Account", "Equity", "Income", "Other Income",
+            "Expense", "Cost of Goods Sold", "Other Expense"
+        ].sort();
+
+        async function executeGroupSync() {
+            if (!confirm("Start Sync of Saved Mapped Groups to Zoho Books?\n\nOnly groups you explicitly mapped will be created.")) return;
+            
+            const btn = document.getElementById('btnGroupSync');
+            const originalText = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+            
+            // Clear previous results
+            const resultsDiv = document.getElementById('syncResultsPanel');
+            if (resultsDiv) resultsDiv.innerHTML = '';
+
+            try {
+               const res = await fetch('/api/ledgers/execute_group_sync', { 
+                   method: 'POST',
+                   headers: {'Content-Type': 'application/json'}
+               });
+               const data = await res.json();
+               
+               if (data.status === 'success') {
+                   const s = data.stats;
+                   const failedLedgers = data.failed_ledgers || [];
+                   const duplicates = data.duplicates || [];
+
+                   // ---- Detect Duplicates from frontend allData ----
+
+                   // Build group name set
+                   const groupNameSet = {};
+                   (allData.groups || []).forEach(g => {
+                       groupNameSet[(g.name || '').toLowerCase().trim()] = g.name;
+                   });
+
+                   // 1. Ledger-Ledger duplicates (same name, different parents)
+                   const tallyNameMap = {};
+                   const allLedgers = [
+                       ...(allData.ledgers || []),
+                       ...(allData.customers || []),
+                       ...(allData.vendors || []),
+                       ...(allData.others || [])
+                   ];
+                   allLedgers.forEach(l => {
+                       const key = (l.name || '').toLowerCase().trim();
+                       if (!key) return;
+                       if (!tallyNameMap[key]) tallyNameMap[key] = [];
+                       const alreadyHas = tallyNameMap[key].some(e => e.parent === l.parent);
+                       if (!alreadyHas) {
+                           tallyNameMap[key].push({ name: l.name, parent: l.parent || '(no parent)' });
+                       }
+                   });
+                   const tallyDuplicates = Object.values(tallyNameMap)
+                       .filter(entries => entries.length > 1)
+                       .map(entries => ({ name: entries[0].name, occurrences: entries, type: 'ledger-ledger' }));
+
+                   // 2. Group-Ledger name collisions (group and ledger share same name)
+                   const groupLedgerCollisions = [];
+                   allLedgers.forEach(l => {
+                       const key = (l.name || '').toLowerCase().trim();
+                       if (groupNameSet[key]) {
+                           // Same name exists as both a Group and a Ledger
+                           const alreadyAdded = groupLedgerCollisions.some(c => c.name.toLowerCase() === key);
+                           if (!alreadyAdded) {
+                               groupLedgerCollisions.push({
+                                   name: l.name,
+                                   ledgerParent: l.parent || '(no parent)',
+                                   groupName: groupNameSet[key]
+                               });
+                           }
+                       }
+                   });
+
+                   // ---- Build Results Panel ----
+                   let html = `
+                    <div class="mt-4" id="syncResultsPanel">
+                        <!-- Summary Card -->
+                        <div class="card border-0 shadow-sm mb-3">
+                            <div class="card-header bg-success text-white fw-bold">
+                                ✅ Sync Complete
+                            </div>
+                            <div class="card-body">
+                                <div class="row text-center g-2">
+                                    <div class="col"><div class="p-2 bg-light rounded"><div class="fs-4 fw-bold text-success">${s.created}</div><div class="small text-muted">Parents Created</div></div></div>
+                                    <div class="col"><div class="p-2 bg-light rounded"><div class="fs-4 fw-bold text-primary">${s.children_created}</div><div class="small text-muted">Child Groups</div></div></div>
+                                    <div class="col"><div class="p-2 bg-light rounded"><div class="fs-4 fw-bold text-info">${s.ledgers_created}</div><div class="small text-muted">Ledgers</div></div></div>
+                                    <div class="col"><div class="p-2 bg-light rounded"><div class="fs-4 fw-bold text-secondary">${s.skipped}</div><div class="small text-muted">Skipped</div></div></div>
+                                    <div class="col"><div class="p-2 bg-light rounded"><div class="fs-4 fw-bold text-danger">${s.failed}</div><div class="small text-muted">Failed</div></div></div>
+                                </div>
+                            </div>
+                        </div>`;
+
+                   // ---- Failed Ledgers Panel (User-Friendly Multi-Select) ----
+                   if (failedLedgers.length > 0) {
+                       const typeOptions = ZOHO_TYPES_STANDALONE.map(t => `<option value="${t}">${t}</option>`).join('');
+                       // Store failed ledgers globally so bulk function can access
+                       window._failedLedgers = failedLedgers;
+                       html += `
+                        <div class="card border-danger shadow-sm mb-3">
+                            <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
+                                <span>⚠️ Failed Ledgers — Review Required (${failedLedgers.length})</span>
+                                <span class="badge bg-white text-danger">Select & Create in Bulk</span>
+                            </div>
+                            <div class="card-body border-bottom pb-3">
+                                <div class="row g-2 align-items-end">
+                                    <div class="col-md-4">
+                                        <label class="form-label fw-bold small text-muted mb-1">APPLY ACCOUNT TYPE TO ALL SELECTED</label>
+                                        <select class="form-select" id="bulkAccountType">
+                                            <option value="">-- Select Type for All --</option>
+                                            ${typeOptions}
+                                        </select>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button class="btn btn-success w-100 fw-bold" onclick="createAllSelected()">
+                                            ✅ Create All Selected
+                                        </button>
+                                    </div>
+                                    <div class="col-md-3">
+                                        <button class="btn btn-outline-secondary w-100" onclick="toggleSelectAll()">
+                                            ☑️ Select / Deselect All
+                                        </button>
+                                    </div>
+                                    <div class="col-md-2 text-end">
+                                        <span id="selectedCount" class="badge bg-primary fs-6">0 selected</span>
+                                    </div>
+                                </div>
+                                <div id="bulkProgressBar" class="mt-2" style="display:none;">
+                                    <div class="progress" style="height: 20px;">
+                                        <div id="bulkProgressFill" class="progress-bar progress-bar-striped progress-bar-animated bg-success" 
+                                             style="width: 0%">0%</div>
+                                    </div>
+                                    <div id="bulkProgressText" class="text-center small text-muted mt-1"></div>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0" id="failedLedgersTable">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th style="width:40px;">
+                                                    <input type="checkbox" class="form-check-input" id="selectAllChk" 
+                                                           onchange="toggleSelectAll(this.checked)" checked>
+                                                </th>
+                                                <th>Ledger Name</th>
+                                                <th>Tally Parent</th>
+                                                <th>Error Reason</th>
+                                                <th style="width:180px;">Override Type</th>
+                                                <th style="width:100px;">Status</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+                       failedLedgers.forEach((l, idx) => {
+                           html += `
+                            <tr id="failedRow_${idx}">
+                                <td><input type="checkbox" class="form-check-input failed-chk" data-idx="${idx}" 
+                                           onchange="updateSelectedCount()" checked></td>
+                                <td class="fw-medium">${l.name}</td>
+                                <td class="text-muted small">${l.parent}</td>
+                                <td><span class="badge bg-danger-subtle text-danger border border-danger-subtle small">${l.error}</span></td>
+                                <td>
+                                    <select class="form-select form-select-sm row-type-select" id="standaloneType_${idx}">
+                                        <option value="">-- use bulk type --</option>
+                                        ${typeOptions}
+                                    </select>
+                                </td>
+                                <td id="failedStatus_${idx}">
+                                    <span class="badge bg-secondary">Pending</span>
+                                </td>
+                            </tr>`;
+                       });
+                       html += `</tbody></table></div></div></div>`;
+                       // Init count after render
+                       setTimeout(() => updateSelectedCount(), 100);
+                   }
+
+
+                   // ---- Duplicates Panel ----
+                   if (duplicates.length > 0) {
+                       html += `
+                        <div class="card border-warning shadow-sm mb-3">
+                            <div class="card-header bg-warning text-dark fw-bold">
+                                🔁 Duplicate Accounts Found in Zoho Books (${duplicates.length})
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr><th>Account Name</th><th>Type</th><th>ID 1</th><th>ID 2</th></tr>
+                                        </thead>
+                                        <tbody>`;
+                       duplicates.forEach(d => {
+                           html += `<tr>
+                                <td class="fw-medium text-warning">${d.name}</td>
+                                <td class="small text-muted">${d.type}</td>
+                                <td class="font-monospace small">${d.id1}</td>
+                                <td class="font-monospace small">${d.id2}</td>
+                            </tr>`;
+                       });
+                       html += `</tbody></table></div></div></div>`;
+                   }
+
+                   // ---- Tally Duplicates Panel ---- (tallyDuplicates computed above from allData)
+                   if (tallyDuplicates.length > 0) {
+                       html += `
+                        <div class="card border-secondary shadow-sm mb-3">
+                            <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between align-items-center">
+                                <span>🔁 Duplicate Ledger Names in Tally (${tallyDuplicates.length})</span>
+                                <span class="badge bg-white text-secondary">These cause count mismatch — only first occurrence synced</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>Ledger Name</th>
+                                                <th>Occurrences in Tally</th>
+                                                <th>Parents (Groups)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+                       tallyDuplicates.forEach(d => {
+                           const parentList = d.occurrences.map(o =>
+                               `<span class="badge bg-light text-dark border me-1">${o.parent || '(no parent)'}</span>`
+                           ).join('');
+                           html += `<tr>
+                                <td class="fw-medium">${d.name}</td>
+                                <td><span class="badge bg-danger rounded-pill">${d.occurrences.length}x</span></td>
+                                <td>${parentList}</td>
+                            </tr>`;
+                       });
+                       html += `</tbody></table></div></div></div>`;
+                   }
+
+                   // ---- Group-Ledger Name Collision Panel ----
+                   if (groupLedgerCollisions.length > 0) {
+                       html += `
+                        <div class="card border-danger shadow-sm mb-3">
+                            <div class="card-header bg-danger bg-opacity-75 text-white fw-bold d-flex justify-content-between align-items-center">
+                                <span>⚠️ Group & Ledger Share Same Name — Count Mismatch (${groupLedgerCollisions.length})</span>
+                                <span class="badge bg-white text-danger">Zoho skips these — causing ${groupLedgerCollisions.length} missing accounts</span>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="alert alert-warning m-2 py-2 small">
+                                    <strong>Why count mismatches:</strong> These names exist as both a <strong>Group (header)</strong> and a <strong>Ledger</strong> in Tally. 
+                                    Zoho Books treats them as one account and skips the ledger — causing your count to be <strong>${groupLedgerCollisions.length} less</strong> than expected.
+                                </div>
+                                <div class="table-responsive">
+                                    <table class="table table-sm table-hover mb-0">
+                                        <thead class="table-light">
+                                            <tr>
+                                                <th>#</th>
+                                                <th>Name (exists as BOTH Group & Ledger)</th>
+                                                <th>As Ledger → under Parent</th>
+                                                <th>As Group (Header)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody>`;
+                       groupLedgerCollisions.forEach((c, i) => {
+                           html += `<tr class="table-danger">
+                                <td class="text-muted">${i + 1}</td>
+                                <td><strong>${c.name}</strong></td>
+                                <td><span class="badge bg-secondary">${c.ledgerParent}</span></td>
+                                <td><span class="badge bg-dark">${c.groupName}</span></td>
+                            </tr>`;
+                       });
+                       html += `</tbody></table></div></div></div>`;
+                   }
+
+                   html += `</div>`; // close syncResultsPanel
+
+                   // Inject into page
+                   let panel = document.getElementById('syncResultsPanel');
+                   if (!panel) {
+                       panel = document.createElement('div');
+                       panel.id = 'syncResultsPanel';
+                       document.querySelector('.container-fluid') && document.querySelector('.container-fluid').appendChild(panel);
+                   }
+                   panel.outerHTML = html;
+
+               } else {
+                   alert('❌ Sync Error: ' + (data.message || 'Unknown error'));
+               }
+            } catch (err) {
+               console.error(err);
+               alert('Connection Error');
+            } finally {
+               if (btn) {
+                   btn.disabled = false;
+                   btn.innerHTML = originalText;
+               }
+            }
+         }
+
+         // ---- Helper: Update selected count badge ----
+         function updateSelectedCount() {
+             const checked = document.querySelectorAll('.failed-chk:checked').length;
+             const total   = document.querySelectorAll('.failed-chk').length;
+             const badge   = document.getElementById('selectedCount');
+             if (badge) badge.textContent = `${checked} / ${total} selected`;
+             // Sync header checkbox state
+             const hdr = document.getElementById('selectAllChk');
+             if (hdr) hdr.checked = checked === total;
+         }
+
+         // ---- Helper: Toggle select all ----
+         function toggleSelectAll(state) {
+             const chks = document.querySelectorAll('.failed-chk');
+             // If called from button (no arg), toggle based on current state
+             if (state === undefined) {
+                 const anyUnchecked = [...chks].some(c => !c.checked);
+                 state = anyUnchecked; // if any unchecked → check all; else uncheck all
+             }
+             chks.forEach(c => c.checked = state);
+             updateSelectedCount();
+         }
+
+         // ---- Bulk Create All Selected ----
+         async function createAllSelected() {
+             const bulkType = document.getElementById('bulkAccountType')?.value || '';
+             const checkedBoxes = [...document.querySelectorAll('.failed-chk:checked')];
+
+             if (checkedBoxes.length === 0) {
+                 alert('Please select at least one ledger!');
+                 return;
+             }
+
+             // Validate: each selected row must have a type (own or bulk)
+             const toCreate = [];
+             for (const chk of checkedBoxes) {
+                 const idx = chk.dataset.idx;
+                 const rowType = document.getElementById(`standaloneType_${idx}`)?.value || '';
+                 const finalType = rowType || bulkType;
+                 if (!finalType) {
+                     alert(`⚠️ No account type set for row ${parseInt(idx)+1}.\nEither select a type in the row, or set a Bulk Type at the top.`);
+                     return;
+                 }
+                 const ledger = window._failedLedgers[idx];
+                 toCreate.push({ idx, name: ledger.name, type: finalType });
+             }
+
+             // Show progress bar
+             const progressBar  = document.getElementById('bulkProgressBar');
+             const progressFill = document.getElementById('bulkProgressFill');
+             const progressText = document.getElementById('bulkProgressText');
+             if (progressBar) progressBar.style.display = 'block';
+
+             let done = 0, failed = 0;
+             for (const item of toCreate) {
+                 // Update progress
+                 const pct = Math.round((done / toCreate.length) * 100);
+                 if (progressFill) { progressFill.style.width = pct + '%'; progressFill.textContent = pct + '%'; }
+                 if (progressText) progressText.textContent = `Creating ${done + 1} of ${toCreate.length}: "${item.name}"...`;
+
+                 // Mark row as "In Progress"
+                 const statusCell = document.getElementById(`failedStatus_${item.idx}`);
+                 if (statusCell) statusCell.innerHTML = `<span class="badge bg-warning text-dark"><span class="spinner-border spinner-border-sm"></span> Creating...</span>`;
+
+                 try {
+                     const res = await fetch('/api/ledgers/create_standalone', {
+                         method: 'POST',
+                         headers: {'Content-Type': 'application/json'},
+                         body: JSON.stringify({ ledger_name: item.name, account_type: item.type })
+                     });
+                     const data = await res.json();
+
+                     if (data.status === 'success') {
+                         done++;
+                         const row = document.getElementById(`failedRow_${item.idx}`);
+                         if (row) row.classList.add('table-success');
+                         if (statusCell) statusCell.innerHTML = `<span class="badge bg-success">✅ Created</span>`;
+                         // Uncheck the row
+                         const chk = document.querySelector(`.failed-chk[data-idx="${item.idx}"]`);
+                         if (chk) { chk.checked = false; chk.disabled = true; }
+                     } else {
+                         failed++;
+                         if (statusCell) statusCell.innerHTML = `<span class="badge bg-danger" title="${data.message}">❌ Failed</span>`;
+                     }
+                 } catch (err) {
+                     failed++;
+                     if (statusCell) statusCell.innerHTML = `<span class="badge bg-danger">❌ Error</span>`;
+                 }
+             }
+
+             // Final progress
+             if (progressFill) { progressFill.style.width = '100%'; progressFill.textContent = '100%'; progressFill.classList.remove('progress-bar-animated'); }
+             if (progressText) progressText.innerHTML = `<strong class="text-success">✅ ${done} created</strong>${failed > 0 ? ` &nbsp; <strong class="text-danger">❌ ${failed} failed</strong>` : ''}`;
+             updateSelectedCount();
+         }
+
+         // ---- Sync Cost Categories → Zoho Reporting Tags ----
+         async function syncReportingTags() {
+             const btn = document.getElementById('btnSyncReportingTags');
+             const originalText = btn.innerHTML;
+             btn.disabled = true;
+             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+
+             const panel = document.getElementById('reportingTagsResultPanel');
+             if (panel) panel.innerHTML = `
+                 <div class="d-flex align-items-center gap-2 text-muted py-3">
+                     <span class="spinner-border spinner-border-sm"></span>
+                     <span>Syncing Cost Categories to Zoho Reporting Tags... This may take a moment.</span>
+                 </div>`;
+
+             try {
+                 const res = await fetch('/api/cost-centers/sync-reporting-tags', { method: 'POST' });
+                 const data = await res.json();
+
+                 if (data.status === 'success') {
+                     const s = data.stats;
+                     const results = data.results || [];
+
+                     let html = `
+                     <div class="mt-3">
+                         <!-- Summary -->
+                         <div class="card border-0 shadow-sm mb-3">
+                             <div class="card-header bg-success text-white fw-bold">
+                                 🏷️ Reporting Tags Sync Complete
+                             </div>
+                             <div class="card-body">
+                                 <div class="row text-center g-2">
+                                     <div class="col"><div class="p-2 bg-light rounded">
+                                         <div class="fs-4 fw-bold text-success">${s.tags_created}</div>
+                                         <div class="small text-muted">Tags Created</div>
+                                     </div></div>
+                                     <div class="col"><div class="p-2 bg-light rounded">
+                                         <div class="fs-4 fw-bold text-secondary">${s.tags_skipped}</div>
+                                         <div class="small text-muted">Tags Skipped</div>
+                                     </div></div>
+                                     <div class="col"><div class="p-2 bg-light rounded">
+                                         <div class="fs-4 fw-bold text-danger">${s.tags_failed}</div>
+                                         <div class="small text-muted">Tags Failed</div>
+                                     </div></div>
+                                     <div class="col"><div class="p-2 bg-light rounded">
+                                         <div class="fs-4 fw-bold text-primary">${s.options_created}</div>
+                                         <div class="small text-muted">Options Created</div>
+                                     </div></div>
+                                     <div class="col"><div class="p-2 bg-light rounded">
+                                         <div class="fs-4 fw-bold text-secondary">${s.options_skipped}</div>
+                                         <div class="small text-muted">Options Skipped</div>
+                                     </div></div>
+                                     <div class="col"><div class="p-2 bg-light rounded">
+                                         <div class="fs-4 fw-bold text-danger">${s.options_failed}</div>
+                                         <div class="small text-muted">Options Failed</div>
+                                     </div></div>
+                                 </div>
+                             </div>
+                         </div>
+
+                         <!-- Per-Category Details -->
+                         <div class="card border-0 shadow-sm">
+                             <div class="card-header bg-light fw-bold">📋 Per-Category Results</div>
+                             <div class="card-body p-0">
+                                 <table class="table table-sm table-hover mb-0 align-middle">
+                                     <thead class="table-light">
+                                         <tr>
+                                             <th>Category (Tag)</th>
+                                             <th>Tag Status</th>
+                                             <th>Tag ID</th>
+                                             <th>Options Created</th>
+                                             <th>Options Skipped</th>
+                                             <th>Options Failed</th>
+                                             <th>Details</th>
+                                         </tr>
+                                     </thead>
+                                     <tbody>`;
+
+                     results.forEach((r, i) => {
+                         const statusBadge = r.status === 'created'
+                             ? `<span class="badge bg-success">✅ Created</span>`
+                             : r.status === 'skipped'
+                             ? `<span class="badge bg-secondary">⏭️ Skipped</span>`
+                             : `<span class="badge bg-danger" title="${r.error || ''}">❌ Failed</span>`;
+
+                         const rowClass = r.status === 'failed' ? 'table-danger' : '';
+
+                         // Build collapsible option list
+                         const collapseId = `optDetails_${i}`;
+                         let optHtml = '';
+                         if (r.option_details && r.option_details.length > 0) {
+                             const optRows = r.option_details.map(o => {
+                                 const ob = o.status === 'created' ? `<span class="badge bg-success-subtle text-success border">✅ Created</span>`
+                                          : o.status === 'skipped' ? `<span class="badge bg-light text-muted border">⏭️ Skipped</span>`
+                                          : `<span class="badge bg-danger-subtle text-danger border" title="${o.error||''}">❌ Failed</span>`;
+                                 return `<tr><td class="ps-3 small">${o.name}</td><td>${ob}</td></tr>`;
+                             }).join('');
+                             optHtml = `
+                                 <button class="btn btn-link btn-sm p-0" data-bs-toggle="collapse" data-bs-target="#${collapseId}">
+                                     View ${r.option_details.length} options
+                                 </button>
+                                 <div class="collapse" id="${collapseId}">
+                                     <table class="table table-sm mb-0 mt-1"><tbody>${optRows}</tbody></table>
+                                 </div>`;
+                         } else {
+                             optHtml = '<span class="text-muted small">No centres</span>';
+                         }
+
+                         html += `<tr class="${rowClass}">
+                             <td class="fw-medium">${r.name}</td>
+                             <td>${statusBadge}</td>
+                             <td class="font-monospace small text-muted">${r.tag_id || '-'}</td>
+                             <td><span class="badge bg-success rounded-pill">${r.options_created}</span></td>
+                             <td><span class="badge bg-secondary rounded-pill">${r.options_skipped}</span></td>
+                             <td><span class="badge bg-danger rounded-pill">${r.options_failed}</span></td>
+                             <td>${optHtml}</td>
+                         </tr>`;
+                     });
+
+                     html += `</tbody></table></div></div></div>`;
+                     if (panel) panel.innerHTML = html;
+
+                 } else {
+                     if (panel) panel.innerHTML = `
+                         <div class="alert alert-danger mt-3">
+                             <strong>❌ Sync Failed:</strong> ${data.message || 'Unknown error'}
+                         </div>`;
+                 }
+             } catch (err) {
+                 console.error(err);
+                 if (panel) panel.innerHTML = `<div class="alert alert-danger mt-3">❌ Connection Error: ${err.message}</div>`;
+             } finally {
+                 btn.disabled = false;
+                 btn.innerHTML = originalText;
+             }
+         }
+
+         // ---- Sync Customers / Vendors → Zoho Contacts ----
+         async function syncContacts(type) {
+             const btnId = type === 'customer' ? 'btnSyncCustomers' : 'btnSyncVendors';
+             const endpoint = type === 'customer' ? '/api/ledgers/sync_customers' : '/api/ledgers/sync_vendors';
+             const label = type === 'customer' ? 'Customers' : 'Vendors';
+
+             const btn = document.getElementById(btnId);
+             const originalText = btn.innerHTML;
+             btn.disabled = true;
+             btn.innerHTML = `<span class="spinner-border spinner-border-sm me-2"></span> Syncing ${label}...`;
+
+             // Show inline status below the table
+             let resultDiv = document.getElementById('contactSyncResult');
+             if (!resultDiv) {
+                 resultDiv = document.createElement('div');
+                 resultDiv.id = 'contactSyncResult';
+                 resultDiv.className = 'p-3';
+                 const container = document.getElementById('ledgersTableContainer');
+                 if (container) container.appendChild(resultDiv);
+             }
+             resultDiv.innerHTML = `
+                 <div class="d-flex align-items-center gap-2 text-muted py-3">
+                     <span class="spinner-border spinner-border-sm"></span>
+                     <span>Syncing ${label} to Zoho Books... This may take several minutes for large datasets.</span>
+                 </div>`;
+
+             try {
+                 const res = await fetch(endpoint, { method: 'POST' });
+                 const data = await res.json();
+
+                  if (data.status === 'success') {
+                      const s = data.stats;
+                      const failed = data.failed_contacts || [];
+
+                      // Build failed contacts list if any
+                      let failedHtml = '';
+                      if (failed.length > 0) {
+                          const rows = failed.map(f =>
+                              `<tr><td class="text-danger fw-medium">${f.name}</td><td class="text-muted small">${f.reason}</td></tr>`
+                          ).join('');
+                          failedHtml = `
+                              <div class="mt-3">
+                                  <button class="btn btn-sm btn-outline-danger" type="button"
+                                      data-bs-toggle="collapse" data-bs-target="#failedContactsList">
+                                      ⚠️ Show ${failed.length} Failed Contact(s)
+                                  </button>
+                                  <div class="collapse mt-2" id="failedContactsList">
+                                      <div class="table-responsive" style="max-height:200px;overflow-y:auto;">
+                                          <table class="table table-sm table-bordered mb-0">
+                                              <thead class="table-light">
+                                                  <tr><th>Contact Name</th><th>Reason</th></tr>
+                                              </thead>
+                                              <tbody>${rows}</tbody>
+                                          </table>
+                                      </div>
+                                  </div>
+                              </div>`;
+                      }
+
+                      const alertClass = s.failed > 0 ? 'alert-warning' : 'alert-success';
+                      resultDiv.innerHTML = `
+                          <div class="alert ${alertClass} border-0 shadow-sm mt-2">
+                              <div class="fw-bold mb-2">${s.failed > 0 ? '⚠️' : '✅'} ${label} Sync Complete</div>
+                              <div class="d-flex gap-4 flex-wrap">
+                                  <span><strong class="text-success">${s.created}</strong> Created</span>
+                                  <span><strong class="text-primary">${s.updated}</strong> Updated</span>
+                                  <span><strong class="text-secondary">${s.skipped || 0}</strong> Skipped</span>
+                                  <span><strong class="text-danger">${s.failed}</strong> Failed</span>
+                              </div>
+                              ${failedHtml}
+                          </div>`;
+
+                 } else {
+                     resultDiv.innerHTML = `
+                         <div class="alert alert-danger mt-2">
+                             <strong>❌ Sync Failed:</strong> ${data.message || 'Unknown error'}
+                         </div>`;
+                 }
+             } catch (err) {
+                 console.error(err);
+                 resultDiv.innerHTML = `<div class="alert alert-danger mt-2">❌ Connection Error: ${err.message}</div>`;
+             } finally {
+                 btn.disabled = false;
+                 btn.innerHTML = originalText;
+             }
+         }
+
     </script>
 </body>
 </html>

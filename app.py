@@ -2,6 +2,7 @@ from flask import Flask, jsonify, render_template, send_file, request
 from flask_cors import CORS
 import sys
 import os
+import json
 
 # Add modules directory to path
 sys.path.append(os.path.dirname(__file__))
@@ -56,6 +57,12 @@ except ImportError as e:
     print(f"❌ Error importing purchase_order_backend: {e}")
     purchase_order_module = None
 
+try:
+    from receipts import receipts_backend as receipts_module
+    print("✅ Successfully imported receipts_backend")
+except ImportError as e:
+    print(f"❌ Error importing receipts_backend: {e}")
+    receipts_module = None
 
 try:
     import database_manager
@@ -127,6 +134,15 @@ def api_fetch_cost_centers():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+@app.route('/api/cost-centers/sync-reporting-tags', methods=['POST'])
+def api_sync_reporting_tags():
+    try:
+        from cost_centers import cost_center_backend
+        result = cost_center_backend.sync_reporting_tags_to_zoho()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 @app.route('/')
 def index():
     return render_template('ledgers.html')
@@ -166,12 +182,70 @@ def api_fetch_items():
 @app.route('/api/ledgers/sync_zoho', methods=['POST'])
 def api_sync_ledgers():
     try:
-        # Get selected ledgers from body if any
         selected = request.json.get("ledgers") if request.is_json else None
         result = ledgers_module.sync_ledgers_to_zoho(selected)
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/ledgers/sync_customers', methods=['POST'])
+def api_sync_customers():
+    """Sync ONLY customers to Zoho Books."""
+    try:
+        selected = request.json.get("ledgers") if request.is_json else None
+        result = ledgers_module.sync_ledgers_to_zoho(selected, contact_type_filter='customer')
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/ledgers/sync_vendors', methods=['POST'])
+def api_sync_vendors():
+    """Sync ONLY vendors to Zoho Books."""
+    try:
+        selected = request.json.get("ledgers") if request.is_json else None
+        result = ledgers_module.sync_ledgers_to_zoho(selected, contact_type_filter='vendor')
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/ledgers/save_mapping', methods=['POST'])
+def api_save_group_mapping():
+    try:
+        mapping = request.json.get("mapping") if request.is_json else {}
+        ledgers_module.save_groups_mapping(mapping)
+        return jsonify({"status": "success", "message": "Mapping saved successfully"})
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/ledgers/get_mapping', methods=['GET'])
+def api_get_group_mapping():
+    try:
+        mapping = ledgers_module.get_groups_mapping()
+        return jsonify(mapping)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/ledgers/execute_group_sync', methods=['POST'])
+def api_execute_group_sync():
+    try:
+        # Load mapping from file in backend
+        result = ledgers_module.sync_groups_to_zoho(None)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/ledgers/create_standalone', methods=['POST'])
+def api_create_standalone():
+    try:
+        ledger_name = request.json.get("ledger_name") if request.is_json else None
+        account_type = request.json.get("account_type") if request.is_json else None
+        if not ledger_name or not account_type:
+            return jsonify({"status": "error", "message": "ledger_name and account_type are required"}), 400
+        result = ledgers_module.create_standalone_account(ledger_name, account_type)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
 
 @app.route('/api/items/sync_zoho', methods=['POST'])
 def api_sync_items():
@@ -342,6 +416,92 @@ def api_sync_purchase_orders():
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+# Receipts (Payment Received) routes
+@app.route('/receipts')
+def receipts_page():
+    return render_template('receipts.html')
+
+@app.route('/api/receipts/fetch', methods=['POST'])
+def api_fetch_receipts():
+    try:
+        from_date = request.json.get("from_date", "20250401") if request.is_json else "20250401"
+        to_date = request.json.get("to_date", "20250430") if request.is_json else "20250430"
+        limit = request.json.get("limit") if request.is_json else None
+        company_name = request.json.get("company_name") if request.is_json else None
+        
+        data = receipts_module.get_all_receipts_data(from_date, to_date, limit, company_name)
+        if data:
+            return jsonify(data)
+        return jsonify({"error": "Failed to fetch receipts from Tally"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/receipts/sync_zoho', methods=['POST'])
+def api_sync_receipts():
+    try:
+        selected = request.json.get("receipts") if request.is_json else None
+        from_date = request.json.get("from_date", "20250401") if request.is_json else "20250401"
+        to_date = request.json.get("to_date", "20250430") if request.is_json else "20250430"
+        limit = request.json.get("limit") if request.is_json else None
+        company_name = request.json.get("company_name") if request.is_json else None
+        
+        result = receipts_module.sync_receipts_to_zoho(selected, from_date, to_date, limit, company_name)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/db/receipts', methods=['GET'])
+def api_db_receipts():
+    """Fetch receipts from SQLite database"""
+    try:
+        receipts = database_manager.get_all_receipts()
+        
+        # Parse JSON fields back to lists/dicts
+        for receipt in receipts:
+            # Parse invoice_allocations
+            if receipt.get('invoice_allocations'):
+                try:
+                    if isinstance(receipt['invoice_allocations'], str):
+                        receipt['invoice_allocations'] = json.loads(receipt['invoice_allocations'])
+                except Exception as e:
+                    print(f"⚠️ Error parsing invoice_allocations for receipt {receipt.get('receipt_number')}: {e}")
+                    receipt['invoice_allocations'] = []
+            else:
+                receipt['invoice_allocations'] = []
+            
+            # Parse ledger_entries
+            if receipt.get('ledger_entries'):
+                try:
+                    if isinstance(receipt['ledger_entries'], str):
+                        receipt['ledger_entries'] = json.loads(receipt['ledger_entries'])
+                except Exception as e:
+                    print(f"⚠️ Error parsing ledger_entries for receipt {receipt.get('receipt_number')}: {e}")
+                    receipt['ledger_entries'] = []
+            else:
+                receipt['ledger_entries'] = []
+            
+            # Parse cost_center_allocations
+            if receipt.get('cost_center_allocations'):
+                try:
+                    if isinstance(receipt['cost_center_allocations'], str):
+                        receipt['cost_center_allocations'] = json.loads(receipt['cost_center_allocations'])
+                except Exception as e:
+                    print(f"⚠️ Error parsing cost_center_allocations for receipt {receipt.get('receipt_number')}: {e}")
+                    receipt['cost_center_allocations'] = []
+            else:
+                receipt['cost_center_allocations'] = []
+        
+        # Calculate stats
+        total_amount = sum(float(r.get('amount', 0) or 0) for r in receipts)
+        
+        return jsonify({
+            "receipts": receipts,
+            "count": len(receipts),
+            "total_amount": total_amount
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @app.route('/api/journals/refresh_cache', methods=['POST'])
 def api_refresh_cache():

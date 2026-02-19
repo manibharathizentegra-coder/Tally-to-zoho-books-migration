@@ -1,0 +1,20 @@
+﻿python : Traceback (most recent call last):
+At line:1 char:1
++ python test_email_fix.py 2>&1 | Out-File -FilePath 
+test_output.txt -E ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (most recen 
+   t call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File 
+"C:\Users\Zen\Desktop\Software_With_Front_END\test_email_fix.py", 
+line 89, in <module>
+    print("\n" + "\u2588"*60)
+  File "C:\Users\Zen\AppData\Local\Programs\Python\Python311\Lib\en
+codings\cp1252.py", line 19, in encode
+    return 
+codecs.charmap_encode(input,self.errors,encoding_table)[0]
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+UnicodeEncodeError: 'charmap' codec can't encode characters in 
+position 2-61: character maps to <undefined>
