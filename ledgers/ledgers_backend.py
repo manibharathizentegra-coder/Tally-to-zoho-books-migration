@@ -1,5 +1,6 @@
 import requests
 import re
+import html as html_module
 from collections import defaultdict
 import sys
 import os
@@ -441,6 +442,19 @@ def sync_groups_to_zoho(mapping=None):
 
     print(f"🚀 Starting Zoho Sync (Groups & Ledgers)... Mapping size: {len(mapping)}")
     stats = {"created": 0, "updated": 0, "failed": 0, "skipped": 0, "children_created": 0, "ledgers_created": 0}
+
+    # ─────────────────────────────────────────────────────────
+    # EXCLUDED GROUPS — these groups + ALL their descendants
+    # are SKIPPED from chart of accounts sync.
+    # (They are already handled as Zoho Contacts — customers/vendors)
+    # Add any future group names here as needed.
+    # ─────────────────────────────────────────────────────────
+    EXCLUDED_GROUPS = {
+        "Sundry Debtors",       # → synced as Zoho Customers
+        "Sundry Creditors",     # → synced as Zoho Vendors
+    }
+    # This set grows dynamically as we discover their sub-groups
+    excluded_group_names = set(g.lower() for g in EXCLUDED_GROUPS)
     failed_ledgers = []   # Ledgers that failed due to type mismatch
     duplicates = []       # Duplicate account names found in Zoho
 
@@ -455,40 +469,111 @@ def sync_groups_to_zoho(mapping=None):
         tally_groups = []
         tally_ledgers = []
 
-    # 2. Get existing Chart of Accounts
+    # 2. Get existing Chart of Accounts (all pages)
     existing_accounts = {}
     page = 1
     has_more = True
-    
-    print("🔍 Fetching existing Chart of Accounts from Zoho...")
-    while has_more:
-        res = zoho.api_call("GET", "/chartofaccounts", params={"page": page, "per_page": 200})
-        if res.get("code") != 0: 
-            print(f"⚠️ Error fetching accounts page {page}: {res.get('message')}")
-            break
-        
-        accounts = res.get("chartofaccounts", [])
-        if not accounts: break
-        
-        # Track duplicates: if name already seen, it's a duplicate
-        seen_in_page = {}
-        for acc in accounts:
-            key = acc["account_name"].lower()
-            if key in existing_accounts:
-                # Duplicate found
-                duplicates.append({
-                    "name": acc["account_name"],
-                    "id1": existing_accounts[key].get("account_id"),
-                    "id2": acc.get("account_id"),
-                    "type": acc.get("account_type", "")
-                })
-            else:
-                existing_accounts[key] = acc
-            
-        has_more = res.get("page_context", {}).get("has_more_page", False)
-        page += 1
 
-    print(f"📊 Found {len(existing_accounts)} existing accounts in Zoho.")
+    def _fetch_all_accounts(filter_type="AccountType.All"):
+        """Fetch ALL accounts from Zoho (all pages) with the given filter_by value."""
+        seen = {}
+        p = 1
+        while True:
+            r = zoho.api_call("GET", "/chartofaccounts", params={
+                "page": p,
+                "per_page": 200,
+                "filter_by": filter_type   # AccountType.All includes system accounts
+            })
+            if r.get("code") != 0:
+                print(f"⚠️ Error on page {p} [{filter_type}]: {r.get('message')}")
+                break
+            batch = r.get("chartofaccounts", [])
+            if not batch:
+                break
+            for acc in batch:
+                raw = html_module.unescape(acc.get("account_name", ""))
+                acc["account_name"] = raw
+                k = raw.lower()
+                if k not in seen:
+                    seen[k] = acc
+            print(f"   📄 [{filter_type}] Page {p}: {len(batch)} fetched (running total: {len(seen)})")
+            if not r.get("page_context", {}).get("has_more_page", False):
+                break
+            p += 1
+        return seen
+
+    print("🔍 Fetching Chart of Accounts from Zoho — user accounts...")
+    existing_accounts = _fetch_all_accounts("AccountType.Active")
+
+    # Also fetch ALL (includes system/built-in accounts like Capital Account, Fixed Assets etc.)
+    print("🔍 Fetching Chart of Accounts from Zoho — including system accounts...")
+    all_accounts = _fetch_all_accounts("AccountType.All")
+    for k, v in all_accounts.items():
+        if k not in existing_accounts:
+            existing_accounts[k] = v  # merge — system accounts fill the gaps
+
+    print(f"📊 Total accounts in local cache: {len(existing_accounts)} (user + system combined).")
+
+    # ─────────────────────────────────────────────────────────
+    # HELPER: When POST says 'already exists', recover from Zoho
+    # ─────────────────────────────────────────────────────────
+    def recover_existing_account(name):
+        """
+        Called when Zoho says 'account already exists' during a POST.
+        Strategy (3 layers — works for user accounts AND Zoho system accounts):
+          1. Check local cache (already fully populated with system accounts)
+          2. Live search using search_text + AccountType.All
+          3. Full page scan with AccountType.All as absolute last resort
+        Returns the account dict or None.
+        """
+        key = html_module.unescape(name).lower()
+
+        # Layer 1: local cache (already includes system accounts from startup fetch)
+        if key in existing_accounts:
+            return existing_accounts[key]
+
+        # Layer 2: live search_text query with ALL filter
+        print(f"   🔎 [Layer 2] Searching Zoho for: '{name}'...")
+        for filter_val in ["AccountType.All", "AccountType.Active"]:
+            search_res = zoho.api_call("GET", "/chartofaccounts", params={
+                "search_text": name,       # correct Zoho search param
+                "filter_by": filter_val,
+                "per_page": 200
+            })
+            if search_res.get("code") == 0:
+                for acc in search_res.get("chartofaccounts", []):
+                    decoded = html_module.unescape(acc.get("account_name", ""))
+                    if decoded.lower() == key:
+                        acc["account_name"] = decoded
+                        existing_accounts[key] = acc   # cache for future calls
+                        print(f"   ✅ [Layer 2] Recovered '{name}' → id={acc.get('account_id')}")
+                        return acc
+
+        # Layer 3: Full page scan (last resort — walks all pages with AccountType.All)
+        print(f"   🔄 [Layer 3] Full page scan for '{name}'...")
+        p = 1
+        while True:
+            r = zoho.api_call("GET", "/chartofaccounts", params={
+                "page": p, "per_page": 200, "filter_by": "AccountType.All"
+            })
+            if r.get("code") != 0:
+                break
+            batch = r.get("chartofaccounts", [])
+            if not batch:
+                break
+            for acc in batch:
+                decoded = html_module.unescape(acc.get("account_name", ""))
+                acc["account_name"] = decoded
+                existing_accounts[decoded.lower()] = acc  # cache everything found
+                if decoded.lower() == key:
+                    print(f"   ✅ [Layer 3] Recovered '{name}' → id={acc.get('account_id')}")
+                    return acc
+            if not r.get("page_context", {}).get("has_more_page", False):
+                break
+            p += 1
+
+        print(f"   ❌ Account '{name}' not found in Zoho via any method.")
+        return None
 
     # 2b. Detect TALLY-side duplicates (same ledger name, different parents)
     tally_duplicates = []
@@ -520,14 +605,16 @@ def sync_groups_to_zoho(mapping=None):
     for group_name, user_type in mapping.items():
         if not user_type:
             continue
-            
-        group_key = group_name.lower()
+
+        group_key = html_module.unescape(group_name).lower()  # FIX: decode before lookup
         account_type = user_type.lower().replace(" ", "_")
-        
-        # Check existence
+
+        # Check existence (HTML-decoded cache)
         if group_key in existing_accounts:
             acc_id = existing_accounts[group_key]["account_id"]
+            print(f"⏩ Parent already in Zoho (cached): '{group_name}' → id={acc_id}")
             valid_parents[group_name] = {"id": acc_id, "type": account_type}
+            stats["skipped"] += 1
             continue
 
         # Create Parent
@@ -540,26 +627,45 @@ def sync_groups_to_zoho(mapping=None):
         res = zoho.api_call("POST", "/chartofaccounts", payload=payload)
 
         if res.get("code") == 0:
-            # FIXED: Helper to get account from response (singular 'chart_of_account')
-            new_acc = res.get("chart_of_account", {}) 
+            new_acc = res.get("chart_of_account", {})
             print(f"✅ Created Parent: {group_name}")
             stats["created"] += 1
-            
             existing_accounts[group_key] = new_acc
             valid_parents[group_name] = {"id": new_acc.get("account_id"), "type": account_type}
+
         else:
-            print(f"❌ Failed to create Parent '{group_name}': {res.get('message')}")
-            stats["failed"] += 1
+            error_msg = res.get("message", "")
+            print(f"⚠️ Could not create Parent '{group_name}': {error_msg}")
+
+            # FIX: 'Already exists' → recover the account_id so children are not abandoned
+            if "already exists" in error_msg.lower():
+                recovered = recover_existing_account(group_name)
+                if recovered:
+                    acc_id = recovered.get("account_id")
+                    existing_accounts[group_key] = recovered
+                    valid_parents[group_name] = {"id": acc_id, "type": account_type}
+                    print(f"✅ Recovered Parent '{group_name}' → id={acc_id}")
+                    stats["skipped"] += 1
+                else:
+                    stats["failed"] += 1
+            else:
+                stats["failed"] += 1
 
     # ---------------------------------------------------------
     # PHASE 2: Sync CHILD Groups (Sub-Accounts) 
     # ---------------------------------------------------------
     print(f"🔹 PHASE 2: Syncing Child Groups under Mapped Parents...")
-    
+
     for grp in tally_groups:
         tally_name = grp["name"]
-        tally_parent = grp["parent"] # The immediate parent in Tally
-        
+        tally_parent = grp["parent"]  # The immediate parent in Tally
+
+        # EXCLUDE: skip Sundry Debtors/Creditors and ALL their descendants
+        if tally_name.lower() in excluded_group_names or tally_parent.lower() in excluded_group_names:
+            excluded_group_names.add(tally_name.lower())  # propagate exclusion to children
+            print(f"⛔ Skipping excluded group: '{tally_name}' (contacts, not chart of accounts)")
+            continue
+
         # Check if Parent is Valid (Mapped)
         if tally_parent in valid_parents:
             parent_info = valid_parents[tally_parent]
@@ -588,27 +694,40 @@ def sync_groups_to_zoho(mapping=None):
                 continue
             
             print(f"🌱 Creating Child Group: '{tally_name}' under '{tally_parent}'...")
-            
+
             payload = {
                 "account_name": tally_name,
                 "account_type": account_type,
                 "parent_account_id": parent_zoho_id,
                 "is_sub_account": True,
-    
             }
-            
+
             res = zoho.api_call("POST", "/chartofaccounts", payload=payload)
-            
+
             if res.get("code") == 0:
-                new_acc = res.get("chart_of_account", {}) # FIXED
+                new_acc = res.get("chart_of_account", {})
                 print(f"✅ Created Child Group: {tally_name}")
                 stats["children_created"] += 1
-                
                 existing_accounts[tally_name.lower()] = new_acc
                 valid_parents[tally_name] = {"id": new_acc.get("account_id"), "type": account_type}
+
             else:
-                print(f"❌ Failed to create Child Group '{tally_name}': {res.get('message')}")
-                stats["failed"] += 1
+                error_msg = res.get("message", "")
+                print(f"⚠️ Could not create Child Group '{tally_name}': {error_msg}")
+
+                # FIX: 'Already exists' → recover so grandchildren/ledgers are not abandoned
+                if "already exists" in error_msg.lower():
+                    recovered = recover_existing_account(tally_name)
+                    if recovered:
+                        acc_id = recovered.get("account_id")
+                        existing_accounts[tally_name.lower()] = recovered
+                        valid_parents[tally_name] = {"id": acc_id, "type": account_type}
+                        print(f"✅ Recovered Child Group '{tally_name}' → id={acc_id}")
+                        stats["skipped"] += 1
+                    else:
+                        stats["failed"] += 1
+                else:
+                    stats["failed"] += 1
 
     # ---------------------------------------------------------
     # PHASE 3: Sync LEDGERS (as Sub-Accounts)
@@ -618,6 +737,11 @@ def sync_groups_to_zoho(mapping=None):
     for ledger in tally_ledgers:
         ledger_name = ledger["name"]
         ledger_parent = ledger["parent"]
+
+        # EXCLUDE: skip ledgers under Sundry Debtors/Creditors (already Zoho contacts)
+        if ledger_parent.lower() in excluded_group_names:
+            stats["skipped"] += 1
+            continue
         
         # Check if Ledger's Parent is in our Valid Scope (Mapped or Created Child)
         if ledger_parent in valid_parents:
@@ -655,22 +779,34 @@ def sync_groups_to_zoho(mapping=None):
             }
 
             res = zoho.api_call("POST", "/chartofaccounts", payload=payload)
-            
+
             if res.get("code") == 0:
                 print(f"✅ Created Ledger: {ledger_name}")
                 stats["ledgers_created"] += 1
-                existing_accounts[ledger_name.lower()] = res.get("chart_of_account") # FIXED
+                existing_accounts[ledger_name.lower()] = res.get("chart_of_account", {})
+
             else:
-                error_msg = res.get('message', 'Unknown error')
-                print(f"❌ Failed to create Ledger '{ledger_name}': {error_msg}")
-                stats["failed"] += 1
-                # Collect failed ledgers for frontend review
-                failed_ledgers.append({
-                    "name": ledger_name,
-                    "parent": ledger_parent,
-                    "error": error_msg,
-                    "inherited_type": account_type
-                })
+                error_msg = res.get("message", "Unknown error")
+
+                # FIX: 'Already exists' → silently skip, not a real failure
+                if "already exists" in error_msg.lower():
+                    recovered = recover_existing_account(ledger_name)
+                    if recovered:
+                        existing_accounts[ledger_name.lower()] = recovered
+                        print(f"⏩ Ledger already exists in Zoho (skipped): '{ledger_name}'")
+                        stats["skipped"] += 1
+                    else:
+                        print(f"⚠️ Ledger '{ledger_name}' reported as existing but could not be found.")
+                        stats["skipped"] += 1
+                else:
+                    print(f"❌ Failed to create Ledger '{ledger_name}': {error_msg}")
+                    stats["failed"] += 1
+                    failed_ledgers.append({
+                        "name": ledger_name,
+                        "parent": ledger_parent,
+                        "error": error_msg,
+                        "inherited_type": account_type
+                    })
 
     # Return combined stats
     stats["total_created"] = stats["created"] + stats["children_created"] + stats["ledgers_created"]
@@ -843,6 +979,13 @@ def sync_ledgers_to_zoho(selected_ledgers=None, contact_type_filter=None):  # OP
 
     def clean(val): return (val or "").replace("\r", "").replace("\n", "").strip()
 
+    def clean_address(val):
+        """Join Tally multi-line address with ', ' so each line stays readable."""
+        if not val:
+            return ""
+        lines = [l.strip() for l in (val or "").replace("\r", "").split("\n") if l.strip()]
+        return ", ".join(lines)
+
     for idx, l in enumerate(ledgers_to_sync, 1):
         # Strip \r \n and extra whitespace — Tally data often has carriage returns embedded
         name = l["name"].replace("\r", "").replace("\n", "").strip()
@@ -863,7 +1006,7 @@ def sync_ledgers_to_zoho(selected_ledgers=None, contact_type_filter=None):  # OP
             continue  # Already in Zoho, skip silently (uncomment print below if needed)
             # print(f"⏭️  Skipped (already exists): {name}")
 
-        address_str = clean(l.get("address", ""))
+        address_str = clean_address(l.get("address", ""))  # joins multi-line with ', '
         city        = ""
         state       = clean(l.get("state", ""))
         zip_code    = clean(l.get("pincode", ""))

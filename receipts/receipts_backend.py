@@ -29,7 +29,7 @@ REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
 ORGANIZATION_ID = os.getenv("ORGANIZATION_ID")
 
 # URLs
-BASE_URL = "https://www.zohoapis.in/books/v3"
+BASE_URL = "https://www.zohoapis.com/books/v3"
 TALLY_URL = "http://localhost:9000"
 
 # ----------------------------------------------------------
@@ -285,7 +285,7 @@ def fetch_tally_receipts(from_date="20250401", to_date="20250430", limit=None, c
 
 def get_access_token():
     """Get Zoho access token using refresh token"""
-    url = "https://accounts.zoho.in/oauth/v2/token"
+    url = "https://accounts.zoho.com/oauth/v2/token"
     params = {
         "refresh_token": REFRESH_TOKEN,
         "client_id": CLIENT_ID,

@@ -1,0 +1,1460 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Tally ↔ Zoho Books — Reconciliation Dashboard</title>
+  <meta name="description" content="Tally to Zoho Books migration reconciliation dashboard — compare trial balances and view PDF reports." />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg: #0b0f1a;
+      --bg2: #111827;
+      --bg3: #1a2235;
+      --card: #151d2e;
+      --border: #1e2d45;
+      --accent: #4f8ef7;
+      --accent2: #7c5cfc;
+      --green: #10b981;
+      --red: #ef4444;
+      --orange: #f97316;
+      --yellow: #eab308;
+      --text: #e2e8f0;
+      --muted: #64748b;
+      --radius: 12px;
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+
+    /* ---- TOP BAR ---- */
+    .topbar {
+      background: linear-gradient(135deg,#0d1b35 0%,#131c30 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      height: 64px;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(10px);
+    }
+    .logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 800;
+      font-size: 1.1rem;
+      letter-spacing: -0.5px;
+    }
+    .logo-icon {
+      width: 36px; height: 36px;
+      background: linear-gradient(135deg,var(--accent),var(--accent2));
+      border-radius: 8px;
+      display: flex;align-items:center;justify-content:center;
+      font-size: 18px;
+    }
+    .topbar-info {
+      margin-left: auto;
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .badge {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+    }
+    .badge.green { border-color: var(--green); color: var(--green); }
+    .badge.red { border-color: var(--red); color: var(--red); }
+    .badge.orange { border-color: var(--orange); color: var(--orange); }
+
+    /* ---- MAIN ---- */
+    .main { max-width: 1400px; margin: 0 auto; padding: 32px 24px; }
+
+    /* ---- UPLOAD SECTION ---- */
+    .upload-section {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 28px;
+      margin-bottom: 28px;
+    }
+    .upload-section h3 { font-size: 1rem; font-weight: 600; margin-bottom: 16px; color: var(--accent); }
+    .upload-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+    .upload-box {
+      border: 2px dashed var(--border);
+      border-radius: 10px;
+      padding: 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: all 0.2s;
+      position: relative;
+    }
+    .upload-box:hover { border-color: var(--accent); background: rgba(79,142,247,0.04); }
+    .upload-box.loaded { border-color: var(--green); background: rgba(16,185,129,0.04); }
+    .upload-box input { position:absolute;inset:0;opacity:0;cursor:pointer;width:100%;height:100%; }
+    .upload-box .icon { font-size: 28px; margin-bottom: 8px; }
+    .upload-box .label { font-size: 0.9rem; font-weight: 600; }
+    .upload-box .sub { font-size: 0.75rem; color: var(--muted); margin-top: 4px; }
+    .compare-btn {
+      margin-top: 20px;
+      width: 100%;
+      padding: 14px;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 10px;
+      color: white;
+      font-size: 1rem;
+      font-weight: 700;
+      cursor: pointer;
+      transition: opacity 0.2s, transform 0.1s;
+    }
+    .compare-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+    .compare-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none;}
+
+    /* ---- STATS GRID ---- */
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .stat-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+      position: relative;
+      overflow: hidden;
+      transition: transform 0.2s;
+    }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 3px;
+    }
+    .stat-card.green::before { background: var(--green); }
+    .stat-card.red::before { background: var(--red); }
+    .stat-card.orange::before { background: var(--orange); }
+    .stat-card.blue::before { background: var(--accent); }
+    .stat-label { font-size: 0.78rem; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat-value { font-size: 2.2rem; font-weight: 800; margin: 6px 0 2px; line-height: 1; }
+    .stat-value.green { color: var(--green); }
+    .stat-value.red { color: var(--red); }
+    .stat-value.orange { color: var(--orange); }
+    .stat-value.blue { color: var(--accent); }
+    .stat-desc { font-size: 0.75rem; color: var(--muted); }
+
+    /* ---- SECTION HEADER ---- */
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .section-title {
+      font-size: 1rem;
+      font-weight: 700;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .dot { width:10px;height:10px;border-radius:50%;flex-shrink:0; }
+    .dot.red { background:var(--red); }
+    .dot.orange { background:var(--orange); }
+    .dot.blue { background:var(--accent); }
+    .dot.green { background:var(--green); }
+
+    /* ---- TABS ---- */
+    .tabs {
+      display: flex;
+      gap: 4px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 4px;
+      margin-bottom: 20px;
+    }
+    .tab {
+      flex: 1;
+      padding: 10px 16px;
+      border: none;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.85rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      text-align: center;
+    }
+    .tab.active {
+      background: var(--card);
+      color: var(--text);
+      box-shadow: 0 1px 6px rgba(0,0,0,0.4);
+    }
+    .tab:hover:not(.active) { color: var(--text); }
+
+    /* ---- TABLE ---- */
+    .table-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .table-controls {
+      padding: 14px 16px;
+      display: flex;
+      gap: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-wrap: wrap;
+    }
+    .search-box {
+      flex: 1;
+      min-width: 200px;
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .search-box:focus { border-color: var(--accent); }
+    .filter-select {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 12px;
+      color: var(--text);
+      font-size: 0.85rem;
+      outline: none;
+      cursor: pointer;
+    }
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    thead tr { background: var(--bg3); }
+    th {
+      padding: 11px 14px;
+      text-align: left;
+      font-size: 0.75rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      cursor: pointer;
+      user-select: none;
+      white-space: nowrap;
+    }
+    th:hover { color: var(--text); }
+    th.sorted { color: var(--accent); }
+    td {
+      padding: 11px 14px;
+      border-bottom: 1px solid var(--border);
+      vertical-align: middle;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: rgba(255,255,255,0.02); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; font-family: 'Inter', monospace; }
+    .diff-chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      border-radius: 6px;
+      padding: 3px 8px;
+      font-size: 0.78rem;
+      font-weight: 700;
+    }
+    .diff-chip.high { background: rgba(239,68,68,0.12); color: var(--red); }
+    .diff-chip.mid { background: rgba(249,115,22,0.12); color: var(--orange); }
+    .diff-chip.low { background: rgba(234,179,8,0.12); color: var(--yellow); }
+    .missing-chip {
+      display: inline-block;
+      border-radius: 6px;
+      padding: 2px 8px;
+      font-size: 0.72rem;
+      font-weight: 600;
+      background: rgba(99,102,241,0.12);
+      color: #818cf8;
+    }
+    .advice-chip {
+      font-size: 0.72rem;
+      color: var(--muted);
+      max-width: 260px;
+    }
+    .name-cell { max-width: 240px; }
+    .name-cell .ledger-name { font-weight: 600; color: var(--text); }
+    .pagination {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 16px;
+      border-top: 1px solid var(--border);
+      font-size: 0.8rem;
+      color: var(--muted);
+    }
+    .page-btns { display: flex; gap: 6px; }
+    .page-btn {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 5px 12px;
+      cursor: pointer;
+      font-size: 0.8rem;
+      transition: all 0.15s;
+    }
+    .page-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .page-btn.active { background: var(--accent); border-color: var(--accent); color: white; }
+    .page-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+    /* ---- INSIGHT CARDS ---- */
+    .insight-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+      gap: 16px;
+      margin-bottom: 28px;
+    }
+    .insight-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px;
+    }
+    .insight-card h4 { font-size: 0.9rem; font-weight: 700; margin-bottom: 10px; display:flex; align-items:center; gap:8px; }
+    .insight-card .ilst { font-size: 0.82rem; color: var(--muted); line-height: 1.7; }
+    .insight-card .ilst li { list-style: none; padding-left: 0; }
+    .insight-card .ilst li::before { content: '→ '; color: var(--accent); }
+
+    /* ---- NO DATA ---- */
+    .no-data { padding: 60px 20px; text-align: center; color: var(--muted); }
+    .no-data .icon { font-size: 48px; margin-bottom: 12px; }
+    .no-data h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 6px; }
+
+    /* ---- PROGRESS BAR ---- */
+    .progress-bar-outer {
+      background: var(--bg3);
+      border-radius: 4px;
+      height: 6px;
+      margin-top: 8px;
+      overflow: hidden;
+    }
+    .progress-bar-inner {
+      height: 100%;
+      border-radius: 4px;
+      transition: width 0.5s ease;
+    }
+
+    /* ---- TOAST ---- */
+    #toast {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 14px 20px;
+      font-size: 0.85rem;
+      box-shadow: 0 8px 30px rgba(0,0,0,0.5);
+      z-index: 999;
+      display: none;
+      animation: slideIn 0.3s ease;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ---- DR/CR colored ---- */
+    .amt-dr { color: var(--accent); }
+    .amt-cr { color: var(--green); }
+    .amt-zero { color: var(--muted); }
+
+    /* ---- Responsive ---- */
+    @media (max-width: 900px) {
+      .stats-grid { grid-template-columns: repeat(2,1fr); }
+      .upload-grid { grid-template-columns: 1fr; }
+    }
+    @media (max-width: 600px) {
+      .stats-grid { grid-template-columns: 1fr; }
+      .topbar { padding: 0 16px; }
+    }
+
+    .loading-spinner {
+      display: inline-block; width: 16px; height: 16px;
+      border: 2px solid rgba(255,255,255,0.3);
+      border-top-color: white;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      vertical-align: middle; margin-right: 6px;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .section-gap { margin-bottom: 28px; }
+
+    .dr-cr-diff {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+    .dr-row, .cr-row { font-size: 0.78rem; }
+
+    .tally-col { color: #60a5fa; }
+    .zoho-col { color: #34d399; }
+
+    .legend {
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+      margin-bottom: 12px;
+    }
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .legend-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+
+    /* ---- PAGE NAV ---- */
+    .page-nav {
+      display: flex;
+      gap: 6px;
+      margin-left: 24px;
+    }
+    .page-nav-btn {
+      padding: 6px 14px;
+      border-radius: 7px;
+      border: 1px solid var(--border);
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+      font-family: 'Inter', sans-serif;
+    }
+    .page-nav-btn.active {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border-color: transparent;
+      color: white;
+    }
+    .page-nav-btn:hover:not(.active) { color: var(--text); border-color: var(--accent); }
+
+    /* ---- PDF TRIAL BALANCE ---- */
+    .pdf-section { display: none; }
+    .pdf-header-card {
+      background: linear-gradient(135deg, #0d1b35 0%, #16213e 100%);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 24px 28px;
+      margin-bottom: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+    .pdf-header-card h2 {
+      font-size: 1.3rem;
+      font-weight: 800;
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+    }
+    .pdf-header-card .meta { font-size: 0.82rem; color: var(--muted); margin-top: 4px; }
+    .pdf-totals-row {
+      display: flex;
+      gap: 16px;
+      flex-wrap: wrap;
+    }
+    .pdf-total-chip {
+      background: var(--bg3);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px 18px;
+      text-align: center;
+    }
+    .pdf-total-chip .label { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .pdf-total-chip .value { font-size: 1.1rem; font-weight: 700; margin-top: 3px; font-variant-numeric: tabular-nums; }
+    .pdf-total-chip.dr .value { color: var(--accent); }
+    .pdf-total-chip.cr .value { color: var(--green); }
+
+    .pdf-controls {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+    .pdf-controls .search-box { max-width: 340px; }
+    .pdf-toggle-btn {
+      background: var(--bg2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 8px 14px;
+      color: var(--text);
+      font-size: 0.82rem;
+      cursor: pointer;
+      transition: all 0.15s;
+      font-family: 'Inter', sans-serif;
+    }
+    .pdf-toggle-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .pdf-upload-btn {
+      background: linear-gradient(135deg, var(--accent), var(--accent2));
+      border: none;
+      border-radius: 8px;
+      padding: 8px 16px;
+      color: white;
+      font-size: 0.82rem;
+      font-weight: 600;
+      cursor: pointer;
+      transition: opacity 0.15s;
+      font-family: 'Inter', sans-serif;
+      position: relative;
+      overflow: hidden;
+    }
+    .pdf-upload-btn input[type=file] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%;
+    }
+    .pdf-upload-btn:hover { opacity: 0.88; }
+
+    /* ---- TRIAL BALANCE TREE TABLE ---- */
+    .tb-wrap {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .tb-table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    .tb-table thead tr { background: var(--bg3); }
+    .tb-table th {
+      padding: 11px 14px;
+      text-align: left;
+      font-size: 0.72rem;
+      font-weight: 600;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      white-space: nowrap;
+    }
+    .tb-table th.num { text-align: right; }
+    .tb-table td {
+      padding: 9px 14px;
+      border-bottom: 1px solid rgba(30,45,69,0.6);
+      vertical-align: middle;
+    }
+    .tb-table tr:last-child td { border-bottom: none; }
+    .tb-table tr:hover td { background: rgba(255,255,255,0.02); }
+    .tb-row-l0 { background: rgba(26,34,53,0.7); }
+    .tb-row-l0 td { font-weight: 700; color: var(--text); }
+    .tb-row-l1 td { font-weight: 600; color: #c8d3e8; }
+    .tb-row-l2 td { color: #9faec8; }
+    .tb-row-l3 td { color: var(--muted); font-size: 0.8rem; }
+    .tb-name-cell {
+      display: flex;
+      align-items: center;
+      gap: 0;
+    }
+    .tb-toggle {
+      cursor: pointer;
+      width: 18px;
+      height: 18px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border-radius: 4px;
+      font-size: 0.7rem;
+      background: var(--bg3);
+      color: var(--muted);
+      margin-right: 6px;
+      flex-shrink: 0;
+      transition: background 0.15s;
+      user-select: none;
+    }
+    .tb-toggle:hover { background: var(--accent); color: white; }
+    .tb-toggle.leaf { background: transparent; cursor: default; color: transparent; }
+    .tb-amount { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
+    .tb-dr { color: var(--accent); }
+    .tb-cr { color: var(--green); }
+    .tb-zero { color: var(--muted); }
+    .tb-net-dr { color: var(--accent); font-size: 0.75rem; }
+    .tb-net-cr { color: var(--green); font-size: 0.75rem; }
+    .tb-footer td {
+      font-weight: 800;
+      font-size: 0.9rem;
+      border-top: 2px solid var(--border);
+      background: var(--bg3);
+      padding: 14px;
+    }
+    .tb-hidden { display: none; }
+    .pdf-empty {
+      padding: 80px 20px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .pdf-empty .icon { font-size: 52px; margin-bottom: 14px; }
+    .pdf-empty h3 { font-size: 1.1rem; font-weight: 600; margin-bottom: 8px; }
+    .pdf-empty p { font-size: 0.85rem; line-height: 1.6; }
+    .pdf-loading {
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--muted);
+    }
+    .pdf-loading .spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+      margin: 0 auto 16px;
+    }
+  </style>
+</head>
+<body>
+
+<!-- TOP BAR -->
+<div class="topbar">
+  <div class="logo">
+    <div class="logo-icon">⚖</div>
+    <span>Tally ↔ Zoho Reconciliation</span>
+  </div>
+  <div class="page-nav">
+    <button class="page-nav-btn active" id="nav-recon" onclick="switchPage('recon')">📊 Reconciliation</button>
+    <button class="page-nav-btn" id="nav-pdf" onclick="switchPage('pdf')">📄 PDF Trial Balance</button>
+  </div>
+  <div class="topbar-info">
+    <span id="period-badge" class="badge">As of 01 Apr 2025</span>
+    <span id="status-badge" class="badge">Load files to begin</span>
+  </div>
+</div>
+
+<div class="main">
+
+  <!-- UPLOAD -->
+  <div class="upload-section">
+    <h3>📂 Load Source Files</h3>
+    <div class="upload-grid">
+      <div class="upload-box" id="tally-box">
+        <input type="file" id="tally-file" accept=".json" />
+        <div class="icon">🏦</div>
+        <div class="label">Tally Trial Balance</div>
+        <div class="sub" id="tally-sub">Drop Tally_TrialBal.json here or click</div>
+      </div>
+      <div class="upload-box" id="zoho-box">
+        <input type="file" id="zoho-file" accept=".json" />
+        <div class="icon">☁️</div>
+        <div class="label">Zoho Books Report</div>
+        <div class="sub" id="zoho-sub">Drop zoho comparison JSON here or click</div>
+      </div>
+    </div>
+    <button class="compare-btn" id="compare-btn" disabled>
+      Load Comparison Data (comparison_result.json)
+    </button>
+  </div>
+
+  <!-- STATS -->
+  <div class="stats-grid" id="stats-grid" style="display:none;">
+    <div class="stat-card green">
+      <div class="stat-label">✅ Matched Ledgers</div>
+      <div class="stat-value green" id="s-matched">0</div>
+      <div class="stat-desc">Amount is correct in both systems</div>
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="pb-matched" style="background:var(--green);width:0%"></div>
+      </div>
+    </div>
+    <div class="stat-card red">
+      <div class="stat-label">❌ Amount Mismatch</div>
+      <div class="stat-value red" id="s-mismatch">0</div>
+      <div class="stat-desc">Same ledger, different amounts</div>
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="pb-mismatch" style="background:var(--red);width:0%"></div>
+      </div>
+    </div>
+    <div class="stat-card orange">
+      <div class="stat-label">⚠️ Missing in Zoho</div>
+      <div class="stat-value orange" id="s-tonly">0</div>
+      <div class="stat-desc">Present in Tally, not found in Zoho</div>
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="pb-tonly" style="background:var(--orange);width:0%"></div>
+      </div>
+    </div>
+    <div class="stat-card blue">
+      <div class="stat-label">🔵 Extra in Zoho</div>
+      <div class="stat-value blue" id="s-zonly">0</div>
+      <div class="stat-desc">In Zoho but not in Tally</div>
+      <div class="progress-bar-outer">
+        <div class="progress-bar-inner" id="pb-zonly" style="background:var(--accent);width:0%"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- INSIGHTS -->
+  <div id="insight-section" style="display:none;" class="section-gap">
+    <div class="section-header">
+      <div class="section-title"><span class="dot red"></span> Root Cause Analysis & Advice</div>
+    </div>
+    <div class="insight-grid" id="insight-grid"></div>
+  </div>
+
+  <!-- TABS + TABLE -->
+  <div id="table-section" style="display:none;">
+    <div class="tabs">
+      <button class="tab active" id="tab-mismatch" onclick="switchTab('mismatch')">❌ Amount Mismatches</button>
+      <button class="tab" id="tab-tonly" onclick="switchTab('tonly')">⚠️ Missing in Zoho</button>
+      <button class="tab" id="tab-zonly" onclick="switchTab('zonly')">🔵 Extra in Zoho</button>
+      <button class="tab" id="tab-matched" onclick="switchTab('matched')">✅ Matched</button>
+    </div>
+
+    <div class="table-wrap">
+      <div class="table-controls">
+        <input class="search-box" type="text" id="search-box" placeholder="🔍  Search ledger name..." oninput="applyFilters()" />
+        <select class="filter-select" id="diff-filter" onchange="applyFilters()">
+          <option value="">All Differences</option>
+          <option value="high">High (&gt;₹1L)</option>
+          <option value="mid">Medium (&gt;₹10K)</option>
+          <option value="low">Low (≤₹10K)</option>
+        </select>
+        <select class="filter-select" id="sort-col" onchange="applyFilters()">
+          <option value="diff">Sort by Difference</option>
+          <option value="name">Sort by Name</option>
+          <option value="tdr">Sort by Tally DR</option>
+          <option value="tcr">Sort by Tally CR</option>
+        </select>
+      </div>
+      <div id="table-container"></div>
+      <div class="pagination" id="pagination" style="display:none;">
+        <span id="page-info"></span>
+        <div class="page-btns" id="page-btns"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- ========== PDF TRIAL BALANCE PAGE ========== -->
+<div class="main pdf-section" id="pdf-page">
+
+  <!-- Header Card -->
+  <div class="pdf-header-card" id="pdf-header-card" style="display:none;">
+    <div>
+      <h2 id="pdf-company-name">Company Name</h2>
+      <div class="meta" id="pdf-period-meta">Trial Balance — Period</div>
+      <div class="meta" style="margin-top:4px;" id="pdf-rows-meta">0 accounts</div>
+    </div>
+    <div class="pdf-totals-row">
+      <div class="pdf-total-chip dr">
+        <div class="label">Total Debit</div>
+        <div class="value" id="pdf-total-dr">₹0</div>
+      </div>
+      <div class="pdf-total-chip cr">
+        <div class="label">Total Credit</div>
+        <div class="value" id="pdf-total-cr">₹0</div>
+      </div>
+      <div class="pdf-total-chip" id="pdf-balance-chip">
+        <div class="label">Balance</div>
+        <div class="value" id="pdf-balance">—</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Controls -->
+  <div class="pdf-controls">
+    <input class="search-box" type="text" id="pdf-search" placeholder="🔍  Search account name..." oninput="pdfSearch()" />
+    <button class="pdf-toggle-btn" onclick="pdfExpandAll(true)">⊞ Expand All</button>
+    <button class="pdf-toggle-btn" onclick="pdfExpandAll(false)">⊟ Collapse All</button>
+    <button class="pdf-toggle-btn" onclick="pdfShowLevel(0)">Top Groups Only</button>
+    <button class="pdf-toggle-btn" onclick="pdfShowLevel(1)">Level 2</button>
+    <button class="pdf-toggle-btn" onclick="pdfShowLevel(2)">Level 3</button>
+    <label class="pdf-upload-btn">📂 Load PDF JSON
+      <input type="file" accept=".json" onchange="pdfLoadFile(event)" />
+    </label>
+  </div>
+
+  <!-- Table -->
+  <div class="tb-wrap" id="pdf-table-wrap">
+    <div class="pdf-loading" id="pdf-loading" style="display:none;">
+      <div class="spinner"></div>
+      <p>Parsing PDF trial balance...</p>
+    </div>
+    <div id="pdf-table-container">
+      <div class="pdf-empty">
+        <div class="icon">📄</div>
+        <h3>PDF Trial Balance</h3>
+        <p>Loading <strong>pdf_trial_balance.json</strong>...<br/>Or click <strong>Load PDF JSON</strong> to browse manually.</p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+<script>
+// ---- State ----
+let state = {
+  tab: 'mismatch',
+  data: null,
+  filteredRows: [],
+  page: 1,
+  pageSize: 25,
+  sortCol: 'diff',
+  sortDir: -1,
+};
+
+// ---- Load from embedded JSON (auto) ----
+window.addEventListener('DOMContentLoaded', () => {
+  fetch('comparison_result.json')
+    .then(r => r.json())
+    .then(d => { loadData(d); toast('✅ Loaded comparison_result.json'); })
+    .catch(() => {
+      // Manual load via file picker
+      document.getElementById('compare-btn').disabled = false;
+      document.getElementById('compare-btn').textContent = 'Load comparison_result.json manually';
+      document.getElementById('compare-btn').addEventListener('click', () => {
+        let inp = document.createElement('input');
+        inp.type = 'file'; inp.accept = '.json';
+        inp.onchange = e => {
+          let file = e.target.files[0];
+          let reader = new FileReader();
+          reader.onload = ev => { loadData(JSON.parse(ev.target.result)); };
+          reader.readAsText(file);
+        };
+        inp.click();
+      });
+    });
+});
+
+function loadData(d) {
+  state.data = d;
+  renderStats(d.summary);
+  renderInsights(d);
+  document.getElementById('stats-grid').style.display = 'grid';
+  document.getElementById('insight-section').style.display = 'block';
+  document.getElementById('table-section').style.display = 'block';
+
+  const total = d.summary.matched + d.summary.mismatched + d.summary.only_tally + d.summary.only_zoho;
+  const matchPct = d.summary.match_pct ?? Math.round(d.summary.matched / total * 100);
+  document.getElementById('status-badge').textContent = `${total} ledgers | Match: ${matchPct}%`;
+  document.getElementById('status-badge').className = 'badge ' + (matchPct >= 80 ? 'green' : 'orange');
+
+  // Show source info in period badge
+  if (d.tally && d.zoho) {
+    document.getElementById('period-badge').textContent =
+      `PDF: ${d.tally.period || ''} | Zoho: ${d.zoho.period || ''}`;
+  } else if (d.summary) {
+    document.getElementById('period-badge').textContent = 'As of 01 Apr 2025';
+  }
+
+  document.getElementById('compare-btn').style.display = 'none';
+  document.querySelector('.upload-section').style.display = 'none';
+  switchTab('mismatch');
+}
+
+function renderStats(s) {
+  const total = s.matched + s.mismatched + s.only_tally + s.only_zoho;
+  document.getElementById('s-matched').textContent = s.matched;
+  document.getElementById('s-mismatch').textContent = s.mismatched;
+  document.getElementById('s-tonly').textContent = s.only_tally;
+  document.getElementById('s-zonly').textContent = s.only_zoho;
+  setTimeout(() => {
+    document.getElementById('pb-matched').style.width = (s.matched/total*100)+'%';
+    document.getElementById('pb-mismatch').style.width = (s.mismatched/total*100)+'%';
+    document.getElementById('pb-tonly').style.width = (s.only_tally/total*100)+'%';
+    document.getElementById('pb-zonly').style.width = (s.only_zoho/total*100)+'%';
+  }, 100);
+}
+
+function renderInsights(d) {
+  // Detect the main root cause: all mismatched are DR/CR reversed
+  const reversed = d.mismatched.filter(r => {
+    return Math.abs(r.tally_cr - r.zoho_dr) < 0.02 || Math.abs(r.tally_dr - r.zoho_cr) < 0.02;
+  });
+  const partialMismatch = d.mismatched.filter(r => r.diff < 1000);
+  const bigMismatch = d.mismatched.filter(r => r.diff >= 100000);
+
+  const insights = [
+    {
+      icon: '🔄',
+      title: 'DR/CR Side Reversal (Critical)',
+      color: 'var(--red)',
+      items: [
+        `${reversed.length} out of ${d.mismatched.length} mismatched ledgers have their Debit/Credit sides exactly reversed in Zoho vs Tally.`,
+        `Root Cause: During Zoho migration, the opening balance sign convention was inverted — Tally Credit balances are imported as Zoho Debit and vice versa.`,
+        `Fix: In Zoho Books → Chart of Accounts → Opening Balances, reverse the DR/CR for these ledgers.`,
+        `Examples: Waterlogic Machines, IGST Input-Import, CGST Input 9%, GST Payable, TDS Receivable.`
+      ]
+    },
+    {
+      icon: '❓',
+      title: `Missing Ledgers in Zoho (${d.only_tally.length} accounts)`,
+      color: 'var(--orange)',
+      items: [
+        `${d.only_tally.length} ledgers exist in Tally but are NOT created in Zoho Books.`,
+        `Most are Sundry Creditors (Vendors) and Sundry Debtors (Customers).`,
+        `In Zoho, these are rolled up into "Accounts Payable" (₹${fmt(d.only_zoho.find(x=>x.ledger=='Accounts Payable')?.zoho_cr||0)}) and "Accounts Receivable" (₹${fmt(d.only_zoho.find(x=>x.ledger=='Accounts Receivable')?.zoho_dr||0)}).`,
+        `Fix: This is by design if contacts/vendors are managed separately. Verify the total matches Tally's Sundry Debtors/Creditors total.`
+      ]
+    },
+    {
+      icon: '🔵',
+      title: 'Zoho-Only Accounts (Aggregated)',
+      color: 'var(--accent)',
+      items: [
+        `"Accounts Receivable" in Zoho (₹${fmt(d.only_zoho.find(x=>x.ledger=='Accounts Receivable')?.zoho_dr||0)}) = Tally's Sundry Debtors total`,
+        `"Accounts Payable" in Zoho (₹${fmt(d.only_zoho.find(x=>x.ledger=='Accounts Payable')?.zoho_cr||0)}) = Tally's Sundry Creditors total`,
+        `"Inventory Asset" in Zoho (₹${fmt(d.only_zoho.find(x=>x.ledger=='Inventory Asset')?.zoho_dr||0)}) = Tally's Stock account`,
+        `"Opening Balance Adjustments" and "Retained Earnings" are Zoho-specific system accounts.`
+      ]
+    },
+    {
+      icon: '📋',
+      title: 'Action Plan to Fix',
+      color: 'var(--green)',
+      items: [
+        `Step 1: Fix DR/CR reversal — Go to Zoho Books → Accountant → Opening Balances → Edit reversed accounts.`,
+        `Step 2: Verify Accounts Receivable total matches Tally Sundry Debtors. If not, check individual customer opening balances.`,
+        `Step 3: Verify Accounts Payable total matches Tally Sundry Creditors total.`,
+        `Step 4: Check "Inventory Asset" in Zoho vs "Opening Stock" / "Closing Stock" in Tally.`,
+        `Step 5: For ${partialMismatch.length} small-diff accounts — check for rounding, TDS deductions, or partial entries.`
+      ]
+    }
+  ];
+
+  const el = document.getElementById('insight-grid');
+  el.innerHTML = insights.map(ins => `
+    <div class="insight-card" style="border-left: 3px solid ${ins.color};">
+      <h4 style="color:${ins.color};">${ins.icon} ${ins.title}</h4>
+      <ul class="ilst">${ins.items.map(i=>`<li>${i}</li>`).join('')}</ul>
+    </div>
+  `).join('');
+}
+
+// ---- Tabs ----
+function switchTab(tab) {
+  state.tab = tab;
+  state.page = 1;
+  ['mismatch','tonly','zonly','matched'].forEach(t => {
+    document.getElementById('tab-'+t).classList.toggle('active', t === tab);
+  });
+  applyFilters();
+}
+
+function applyFilters() {
+  if (!state.data) return;
+  const search = document.getElementById('search-box').value.toLowerCase();
+  const diffF = document.getElementById('diff-filter').value;
+  const sortC = document.getElementById('sort-col').value;
+  state.sortCol = sortC;
+
+  let rows = [];
+  if (state.tab === 'mismatch') rows = [...state.data.mismatched];
+  else if (state.tab === 'tonly') rows = [...state.data.only_tally];
+  else if (state.tab === 'zonly') rows = [...state.data.only_zoho];
+  else rows = [...state.data.matched];
+
+  // Search
+  if (search) rows = rows.filter(r => r.ledger.toLowerCase().includes(search));
+
+  // Diff filter (only for mismatch)
+  if (state.tab === 'mismatch' && diffF) {
+    if (diffF === 'high') rows = rows.filter(r => r.diff >= 100000);
+    else if (diffF === 'mid') rows = rows.filter(r => r.diff >= 10000 && r.diff < 100000);
+    else if (diffF === 'low') rows = rows.filter(r => r.diff < 10000);
+  }
+
+  // Sort
+  rows.sort((a,b) => {
+    if (sortC === 'name') return a.ledger.localeCompare(b.ledger);
+    if (sortC === 'diff') return (b.diff||0) - (a.diff||0);
+    if (sortC === 'tdr') return (b.tally_dr||0) - (a.tally_dr||0);
+    if (sortC === 'tcr') return (b.tally_cr||0) - (a.tally_cr||0);
+    return 0;
+  });
+
+  state.filteredRows = rows;
+  state.page = 1;
+  renderTable();
+}
+
+function renderTable() {
+  const { tab, filteredRows, page, pageSize } = state;
+  const start = (page-1)*pageSize;
+  const pageRows = filteredRows.slice(start, start+pageSize);
+  const total = filteredRows.length;
+
+  let html = '';
+  if (total === 0) {
+    html = `<div class="no-data"><div class="icon">🎉</div><h3>No records found</h3><p>Great! Nothing to show here.</p></div>`;
+    document.getElementById('pagination').style.display = 'none';
+  } else {
+    if (tab === 'mismatch') html = renderMismatchTable(pageRows);
+    else if (tab === 'tonly') html = renderTonlyTable(pageRows);
+    else if (tab === 'zonly') html = renderZonlyTable(pageRows);
+    else html = renderMatchedTable(pageRows);
+
+    // Pagination
+    const totalPages = Math.ceil(total/pageSize);
+    document.getElementById('pagination').style.display = 'flex';
+    document.getElementById('page-info').textContent = `Showing ${start+1}–${Math.min(start+pageSize,total)} of ${total} records`;
+    renderPageBtns(totalPages);
+  }
+
+  document.getElementById('table-container').innerHTML = html;
+}
+
+function renderPageBtns(totalPages) {
+  const p = state.page;
+  let btns = '';
+  btns += `<button class="page-btn" onclick="goPage(${p-1})" ${p===1?'disabled':''}>‹ Prev</button>`;
+  let from = Math.max(1, p-2), to = Math.min(totalPages, p+2);
+  if (from > 1) btns += `<button class="page-btn" onclick="goPage(1)">1</button>${from>2?'<span style="color:var(--muted);padding:0 4px;">…</span>':''}`;
+  for (let i=from;i<=to;i++) btns += `<button class="page-btn ${i===p?'active':''}" onclick="goPage(${i})">${i}</button>`;
+  if (to < totalPages) btns += `${to<totalPages-1?'<span style="color:var(--muted);padding:0 4px;">…</span>':''}<button class="page-btn" onclick="goPage(${totalPages})">${totalPages}</button>`;
+  btns += `<button class="page-btn" onclick="goPage(${p+1})" ${p===totalPages?'disabled':''}>Next ›</button>`;
+  document.getElementById('page-btns').innerHTML = btns;
+}
+
+function goPage(p) {
+  state.page = p;
+  renderTable();
+  document.querySelector('.table-wrap').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+function fmt(n) {
+  if (n === null || n === undefined) return '-';
+  return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function diffClass(d) {
+  if (d >= 100000) return 'high';
+  if (d >= 10000) return 'mid';
+  return 'low';
+}
+
+function advice(row) {
+  const tNet = row.t_net, zNet = row.z_net;
+  if (Math.abs(Math.abs(tNet) - Math.abs(zNet)) < 0.02) {
+    return '🔄 DR/CR reversed in Zoho — flip the balance side';
+  }
+  if (row.tally_dr === 0 && row.tally_cr === 0) return '⚠ Zero in Tally — check if entry exists';
+  if (row.zoho_dr === 0 && row.zoho_cr === 0) return '⚠ Zero in Zoho — opening balance not set';
+  return '🔢 Partial amount mismatch — check individual entries';
+}
+
+function rootCauseHtml(rc) {
+  if (!rc) return '';
+  const map = {
+    'DR/CR Side Reversed':                  ['🔄', 'var(--red)',    'Flip DR/CR in Zoho → Accountant → Opening Balances'],
+    'Zero in Zoho - Opening balance not set':['⭕', 'var(--blue)',   'Set opening balance in Zoho → Chart of Accounts'],
+    'Zero in Tally – Entry may be missing': ['⚠',  'var(--orange)', 'Verify account in Tally for this date'],
+    'Partial amount mismatch':              ['🔢', 'var(--yellow)', 'Check for TDS, rounding, or partial entries'],
+  };
+  const [icon, color, fix] = map[rc] || ['❓', 'var(--muted)', 'Verify manually'];
+  return `<span style="color:${color};font-weight:600;font-size:0.75rem;">${icon} ${rc}</span><br/><span style="color:var(--muted);font-size:0.72rem;">${fix}</span>`;
+}
+
+function renderMismatchTable(rows) {
+  return `
+    <table>
+      <thead><tr>
+        <th>#</th>
+        <th>Tally Account (PDF)</th>
+        <th>Zoho Account (Excel)</th>
+        <th class="num tally-col">Tally DR</th>
+        <th class="num tally-col">Tally CR</th>
+        <th class="num zoho-col">Zoho DR</th>
+        <th class="num zoho-col">Zoho CR</th>
+        <th class="num">Difference</th>
+        <th>Root Cause &amp; Fix</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r,i) => `
+          <tr>
+            <td style="color:var(--muted);font-size:0.75rem;">${(state.page-1)*state.pageSize+i+1}</td>
+            <td class="name-cell"><span class="ledger-name">${esc(r.ledger)}</span></td>
+            <td class="name-cell" style="font-size:0.78rem;color:#94a3b8;">${esc(r.zoho_name || r.ledger)}</td>
+            <td class="num amt-dr">${r.tally_dr > 0 ? fmt(r.tally_dr) : '<span class="amt-zero">&mdash;</span>'}</td>
+            <td class="num amt-cr">${r.tally_cr > 0 ? fmt(r.tally_cr) : '<span class="amt-zero">&mdash;</span>'}</td>
+            <td class="num amt-dr">${r.zoho_dr > 0 ? fmt(r.zoho_dr) : '<span class="amt-zero">&mdash;</span>'}</td>
+            <td class="num amt-cr">${r.zoho_cr > 0 ? fmt(r.zoho_cr) : '<span class="amt-zero">&mdash;</span>'}</td>
+            <td class="num"><span class="diff-chip ${diffClass(r.diff)}">&#8377;${fmt(r.diff)}</span></td>
+            <td class="advice-chip" style="max-width:220px;">${r.root_cause ? rootCauseHtml(r.root_cause) : advice(r)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderTonlyTable(rows) {
+  return `
+    <table>
+      <thead><tr>
+        <th>#</th>
+        <th>Ledger Name (Tally)</th>
+        <th class="num">Tally DR</th>
+        <th class="num">Tally CR</th>
+        <th>Status</th>
+        <th>Fix Required</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r,i) => `
+          <tr>
+            <td style="color:var(--muted);font-size:0.75rem;">${(state.page-1)*state.pageSize+i+1}</td>
+            <td class="name-cell"><span class="ledger-name">${esc(r.ledger)}</span></td>
+            <td class="num amt-dr">${r.tally_dr > 0 ? fmt(r.tally_dr) : '<span class="amt-zero">—</span>'}</td>
+            <td class="num amt-cr">${r.tally_cr > 0 ? fmt(r.tally_cr) : '<span class="amt-zero">—</span>'}</td>
+            <td><span class="missing-chip">Not in Zoho</span></td>
+            <td class="advice-chip" style="font-size:0.75rem;color:var(--muted);">Create account in Zoho or verify it's rolled into AP/AR</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderZonlyTable(rows) {
+  return `
+    <table>
+      <thead><tr>
+        <th>#</th>
+        <th>Account Name (Zoho)</th>
+        <th class="num">Zoho DR</th>
+        <th class="num">Zoho CR</th>
+        <th>Status</th>
+        <th>Explanation</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r,i) => `
+          <tr>
+            <td style="color:var(--muted);font-size:0.75rem;">${(state.page-1)*state.pageSize+i+1}</td>
+            <td class="name-cell"><span class="ledger-name">${esc(r.ledger)}</span></td>
+            <td class="num amt-dr">${r.zoho_dr > 0 ? fmt(r.zoho_dr) : '<span class="amt-zero">—</span>'}</td>
+            <td class="num amt-cr">${r.zoho_cr > 0 ? fmt(r.zoho_cr) : '<span class="amt-zero">—</span>'}</td>
+            <td><span class="missing-chip" style="background:rgba(16,185,129,0.1);color:var(--green);">Zoho System</span></td>
+            <td class="advice-chip">${zohoExplain(r.ledger)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function renderMatchedTable(rows) {
+  return `
+    <table>
+      <thead><tr>
+        <th>#</th>
+        <th>Ledger Name</th>
+        <th class="num">Tally DR</th>
+        <th class="num">Tally CR</th>
+        <th class="num">Zoho DR</th>
+        <th class="num">Zoho CR</th>
+        <th>Status</th>
+      </tr></thead>
+      <tbody>
+        ${rows.map((r,i) => `
+          <tr>
+            <td style="color:var(--muted);font-size:0.75rem;">${(state.page-1)*state.pageSize+i+1}</td>
+            <td class="name-cell"><span class="ledger-name">${esc(r.ledger)}</span></td>
+            <td class="num amt-dr">${r.tally_dr > 0 ? fmt(r.tally_dr) : '<span class="amt-zero">—</span>'}</td>
+            <td class="num amt-cr">${r.tally_cr > 0 ? fmt(r.tally_cr) : '<span class="amt-zero">—</span>'}</td>
+            <td class="num amt-dr">${r.zoho_dr > 0 ? fmt(r.zoho_dr) : '<span class="amt-zero">—</span>'}</td>
+            <td class="num amt-cr">${r.zoho_cr > 0 ? fmt(r.zoho_cr) : '<span class="amt-zero">—</span>'}</td>
+            <td><span class="diff-chip" style="background:rgba(16,185,129,0.12);color:var(--green);">✓ Matched</span></td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+}
+
+function zohoExplain(name) {
+  const m = {
+    'Accounts Receivable': 'Aggregate of all Tally Sundry Debtors — verify total matches',
+    'Accounts Payable': 'Aggregate of all Tally Sundry Creditors — verify total matches',
+    'Inventory Asset': 'Maps to Opening Stock / Closing Stock in Tally',
+    'Opening Balance Adjustments': 'Zoho auto-entry to balance the books on import',
+    'Retained Earnings': 'Zoho system account for accumulated profit/loss',
+    'Petty Cash': 'Check corresponding cash account in Tally',
+  };
+  return m[name] || 'Zoho-specific system account — verify manually';
+}
+
+function esc(s) {
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.display = 'block';
+  setTimeout(() => { t.style.display = 'none'; }, 3000);
+}
+// ---- PAGE SWITCHING ----
+let currentPage = 'recon';
+function switchPage(page) {
+  currentPage = page;
+  document.getElementById('nav-recon').classList.toggle('active', page === 'recon');
+  document.getElementById('nav-pdf').classList.toggle('active', page === 'pdf');
+  // Show/hide the recon sections
+  const reconEls = ['.upload-section','#stats-grid','#insight-section','#table-section'];
+  reconEls.forEach(sel => {
+    const el = document.querySelector(sel);
+    if (!el) return;
+    el.dataset.wasHidden = el.style.display;
+    if (page === 'pdf') el.style.display = 'none';
+    else el.style.display = el.dataset.originalDisplay || '';
+  });
+  document.getElementById('pdf-page').style.display = page === 'pdf' ? 'block' : 'none';
+}
+
+// ---- PDF TRIAL BALANCE STATE ----
+let pdfState = {
+  rows: [],          // flat rows from JSON
+  collapsed: new Set(),  // set of row indices that are collapsed
+  company: '',
+  period: '',
+  totalDr: 0,
+  totalCr: 0,
+};
+
+// Auto-load pdf_trial_balance.json on startup
+window.addEventListener('DOMContentLoaded', () => {
+  // Store original display states for recon section elements
+  ['.upload-section','#stats-grid','#insight-section','#table-section'].forEach(sel => {
+    const el = document.querySelector(sel);
+    if (el) el.dataset.originalDisplay = el.style.display;
+  });
+
+  fetch('pdf_trial_balance.json')
+    .then(r => r.json())
+    .then(d => {
+      loadPdfData(d);
+      toast('📄 Loaded pdf_trial_balance.json');
+    })
+    .catch(() => {
+      // Show empty state, user can upload manually
+    });
+});
+
+function pdfLoadFile(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const d = JSON.parse(e.target.result);
+      loadPdfData(d);
+      toast('📄 Loaded ' + file.name);
+    } catch(err) {
+      toast('❌ Invalid JSON file');
+    }
+  };
+  reader.readAsText(file);
+}
+
+function loadPdfData(d) {
+  pdfState.rows = d.rows || [];
+  pdfState.company = d.company || 'Company';
+  pdfState.period = d.period || '';
+  pdfState.collapsed = new Set();
+
+  // Calculate top-level totals (sum of level-0 rows)
+  let totalDr = 0, totalCr = 0;
+  pdfState.rows.forEach(r => {
+    if (r.level === 0) {
+      totalDr += r.debit || 0;
+      totalCr += r.credit || 0;
+    }
+  });
+  pdfState.totalDr = totalDr;
+  pdfState.totalCr = totalCr;
+
+  // Update header
+  document.getElementById('pdf-company-name').textContent = pdfState.company;
+  document.getElementById('pdf-period-meta').textContent = 'Trial Balance — ' + pdfState.period;
+  document.getElementById('pdf-rows-meta').textContent = pdfState.rows.length + ' accounts';
+  document.getElementById('pdf-total-dr').textContent = '₹' + fmtPdf(totalDr);
+  document.getElementById('pdf-total-cr').textContent = '₹' + fmtPdf(totalCr);
+  const diff = Math.abs(totalDr - totalCr);
+  const balEl = document.getElementById('pdf-balance');
+  const chipEl = document.getElementById('pdf-balance-chip');
+  if (diff < 1) {
+    balEl.textContent = '✓ Balanced';
+    balEl.style.color = 'var(--green)';
+    chipEl.style.borderColor = 'var(--green)';
+  } else {
+    balEl.textContent = '₹' + fmtPdf(diff) + ' off';
+    balEl.style.color = 'var(--orange)';
+    chipEl.style.borderColor = 'var(--orange)';
+  }
+  document.getElementById('pdf-header-card').style.display = 'flex';
+
+  renderPdfTable();
+}
+
+function renderPdfTable() {
+  const search = (document.getElementById('pdf-search')?.value || '').toLowerCase();
+  const rows = pdfState.rows;
+  const collapsed = pdfState.collapsed;
+
+  if (rows.length === 0) return;
+
+  // Determine visibility: a row is hidden if any ancestor is collapsed
+  // We track "collapsed parent levels" as we walk through
+  let html = '<table class="tb-table">';
+  html += '<thead><tr>';
+  html += '<th style="width:50%">Account Name</th>';
+  html += '<th class="num" style="color:#60a5fa;">Debit (₹)</th>';
+  html += '<th class="num" style="color:#34d399;">Credit (₹)</th>';
+  html += '<th class="num">Net Position</th>';
+  html += '</tr></thead>';
+  html += '<tbody>';
+
+  // Determine which indices to show given collapsed parents
+  // We track the current "collapse boundary": if we see a collapsed node at level L,
+  // all subsequent rows with level > L are hidden until we exit that level.
+  let hideUntilLevel = -1; // -1 = show everything
+
+  // Find indices that are group parents (have children)
+  const hasChildren = new Set();
+  for (let i = 0; i < rows.length - 1; i++) {
+    if (rows[i+1].level > rows[i].level) hasChildren.add(i);
+  }
+
+  let totalDrVisible = 0, totalCrVisible = 0;
+  let visibleCount = 0;
+
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    const isParent = hasChildren.has(i);
+    const isCollapsed = collapsed.has(i);
+
+    // Check if this row should be hidden due to collapsed ancestor
+    let hidden = false;
+    if (hideUntilLevel >= 0 && r.level > hideUntilLevel) hidden = true;
+    if (hideUntilLevel >= 0 && r.level <= hideUntilLevel) hideUntilLevel = -1; // exit collapse zone
+    if (isCollapsed && isParent) {
+      if (hideUntilLevel < 0 || r.level > hideUntilLevel) hideUntilLevel = r.level;
+    }
+
+    // Search filter: if searching, show row if name matches OR has matching descendant
+    let searchMatch = true;
+    if (search) {
+      searchMatch = r.name.toLowerCase().includes(search);
+      if (!searchMatch) hidden = true;
+    }
+
+    if (!hidden && searchMatch) {
+      visibleCount++;
+      if (r.level === 0) {
+        totalDrVisible += r.debit || 0;
+        totalCrVisible += r.credit || 0;
+      }
+    }
+
+    const indent = r.level * 22;
+    const toggleIcon = isParent ? (isCollapsed ? '▶' : '▼') : '';
+    const toggleClass = isParent ? '' : 'leaf';
+    const drAmt = r.debit  ? '<span class="tb-dr">' + fmtPdf(r.debit) + '</span>' : '<span class="tb-zero">—</span>';
+    const crAmt = r.credit ? '<span class="tb-cr">' + fmtPdf(r.credit) + '</span>' : '<span class="tb-zero">—</span>';
+    const net = (r.debit || 0) - (r.credit || 0);
+    let netHtml;
+    if (Math.abs(net) < 0.005) netHtml = '<span class="tb-zero">—</span>';
+    else if (net > 0) netHtml = '<span class="tb-net-dr">DR ' + fmtPdf(Math.abs(net)) + '</span>';
+    else netHtml = '<span class="tb-net-cr">CR ' + fmtPdf(Math.abs(net)) + '</span>';
+
+    const rowClass = 'tb-row-l' + Math.min(r.level, 3);
+    const hiddenAttr = hidden ? ' class="tb-hidden"' : '';
+    const toggleAttr = isParent ? ` onclick="pdfToggle(${i})"` : '';
+
+    html += `<tr${hiddenAttr} data-idx="${i}" data-level="${r.level}" class="${rowClass}">`;
+    html += `<td><div class="tb-name-cell" style="padding-left:${indent}px;">`;
+    html += `<span class="tb-toggle ${toggleClass}"${toggleAttr}>${toggleIcon}</span>`;
+    html += `<span>${esc(r.name)}</span></div></td>`;
+    html += `<td class="tb-amount">${drAmt}</td>`;
+    html += `<td class="tb-amount">${crAmt}</td>`;
+    html += `<td class="tb-amount">${netHtml}</td>`;
+    html += '</tr>';
+  }
+
+  // Footer totals row
+  html += `<tr class="tb-footer">`;
+  html += `<td>Grand Total (${visibleCount} accounts)</td>`;
+  html += `<td class="tb-amount"><span class="tb-dr">${fmtPdf(pdfState.totalDr)}</span></td>`;
+  html += `<td class="tb-amount"><span class="tb-cr">${fmtPdf(pdfState.totalCr)}</span></td>`;
+  html += `<td class="tb-amount"></td>`;
+  html += `</tr>`;
+
+  html += '</tbody></table>';
+  document.getElementById('pdf-table-container').innerHTML = html;
+}
+
+function pdfToggle(idx) {
+  if (pdfState.collapsed.has(idx)) pdfState.collapsed.delete(idx);
+  else pdfState.collapsed.add(idx);
+  renderPdfTable();
+}
+
+function pdfExpandAll(expand) {
+  if (expand) pdfState.collapsed.clear();
+  else {
+    // Collapse all parent rows
+    const rows = pdfState.rows;
+    for (let i = 0; i < rows.length - 1; i++) {
+      if (rows[i+1].level > rows[i].level) pdfState.collapsed.add(i);
+    }
+  }
+  renderPdfTable();
+}
+
+function pdfShowLevel(maxLevel) {
+  // Collapse all nodes at or deeper than maxLevel that have children
+  const rows = pdfState.rows;
+  pdfState.collapsed.clear();
+  for (let i = 0; i < rows.length - 1; i++) {
+    if (rows[i+1].level > rows[i].level && rows[i].level >= maxLevel) {
+      pdfState.collapsed.add(i);
+    }
+  }
+  renderPdfTable();
+}
+
+function pdfSearch() {
+  // When searching, expand all so results are visible
+  const search = document.getElementById('pdf-search').value;
+  if (search) pdfState.collapsed.clear();
+  renderPdfTable();
+}
+
+function fmtPdf(n) {
+  if (n === null || n === undefined || isNaN(n)) return '—';
+  return n.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+</script>
+</body>
+</html>

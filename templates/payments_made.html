@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payments Made - Tally to Zoho Migration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
+        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav-link.active { color: #d32f2f !important; font-weight: 500; border-bottom: 2px solid #d32f2f; }
+        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #d32f2f; transition: transform 0.2s; }
+        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
+        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
+        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
+        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
+        .payment-mode-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
+        .mode-cash { background: #e8f5e9; color: #2e7d32; }
+        .mode-bank { background: #e3f2fd; color: #1565c0; }
+        .mode-other { background: #fff3e0; color: #e65100; }
+    </style>
+</head>
+<body>
+
+    <!-- NAVBAR -->
+    <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
+        <a class="navbar-brand d-flex align-items-center" href="#">
+            <i class="bi bi-wallet2 text-primary fs-3 me-2"></i>
+            <span class="fw-bold text-primary">TallySoft</span>
+        </a>
+        <div class="collapse navbar-collapse ms-4">
+            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/ledgers"><i class="bi bi-journal-text me-1"></i> Ledgers</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/items"><i class="bi bi-box-seam me-1"></i> Items</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/journals"><i class="bi bi-journal-bookmark me-1"></i> Journals</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/invoices"><i class="bi bi-receipt me-1"></i> Invoices</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/bills"><i class="bi bi-file-earmark-text me-1"></i> Bills</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/receipts"><i class="bi bi-cash-coin me-1"></i> Payment Received</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link active" href="/payments_made"><i class="bi bi-cash-stack me-1"></i> Payments Made</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/sales_orders"><i class="bi bi-cart-check me-1"></i> Sales Orders</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/purchase_orders"><i class="bi bi-bag-check me-1"></i> Purchase Orders</a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/opening-balance"><i class="bi bi-bank me-1"></i> Opening Balance</a>
+                </li>
+            </ul>
+        </div>
+    </nav>
+
+    <div class="container-fluid py-4 px-4">
+
+        <!-- HEADER & ACTIONS -->
+        <div class="d-flex justify-content-between align-items-center mb-4">
+            <div>
+                <h4 class="fw-bold mb-1">Payments Made</h4>
+                <p class="text-muted small mb-0">View and sync vendor payments from Tally to Zoho Books</p>
+            </div>
+            <div class="d-flex gap-2">
+                <button id="syncBtn" onclick="syncZoho()" class="btn btn-outline-danger d-flex align-items-center">
+                    <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+                </button>
+                <input type="file" id="jsonUpload" accept=".json" style="display: none;" onchange="uploadJson(event)">
+                <button id="uploadBtn" onclick="document.getElementById('jsonUpload').click()" class="btn btn-warning d-flex align-items-center">
+                    <i class="bi bi-upload me-2"></i> Upload JSON
+                </button>
+                <button id="importBtn" onclick="fetchData()" class="btn btn-danger d-flex align-items-center">
+                    <i class="bi bi-cloud-download me-2"></i> Import from Tally
+                </button>
+            </div>
+        </div>
+
+        <!-- DATE RANGE SELECTOR -->
+        <div class="content-card mb-4 p-3">
+            <div class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">From Date</label>
+                    <input type="date" id="fromDate" class="form-control" value="2025-04-01">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label small fw-bold">To Date</label>
+                    <input type="date" id="toDate" class="form-control" value="2025-04-30">
+                </div>
+                <div class="col-md-2">
+                    <label class="form-label small fw-bold">Limit (optional)</label>
+                    <input type="number" id="limitInput" class="form-control" placeholder="All">
+                </div>
+                <div class="col-md-4">
+                    <button onclick="fetchData()" class="btn btn-secondary w-100">
+                        <i class="bi bi-funnel me-2"></i> Apply Filter
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- KPI CARDS -->
+        <div class="row g-3 mb-4">
+            <div class="col-md-6">
+                <div class="kpi-card">
+                    <div class="kpi-label">Total Payments Made</div>
+                    <div class="kpi-value" id="total-payments">0</div>
+                </div>
+            </div>
+            <div class="col-md-6">
+                <div class="kpi-card" style="border-color: #c62828;">
+                    <div class="kpi-label">Total Amount Paid</div>
+                    <div class="kpi-value text-danger" id="total-amount">₹0</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TABLE -->
+        <div class="content-card">
+            <div class="p-3 border-bottom bg-light d-flex justify-content-between">
+                <div class="input-group" style="max-width: 300px;">
+                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
+                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search payments..." onkeyup="handleSearch()">
+                </div>
+            </div>
+            <div class="table-responsive" style="max-height: 600px;">
+                <table class="table table-hover align-middle mb-0">
+                    <thead class="sticky-top">
+                        <tr>
+                            <th>Payment #</th>
+                            <th>Date</th>
+                            <th>Vendor</th>
+                            <th>Payment Mode</th>
+                            <th class="text-end">Amount</th>
+                            <th class="text-center">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                        <tr>
+                            <td colspan="6" class="text-center py-5 text-muted">
+                                <i class="bi bi-cash-stack fs-1 mb-2"></i><br>
+                                Click "Import Payments Made" to fetch data from Tally
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAYMENT DETAIL MODAL -->
+    <div class="modal fade" id="paymentModal" tabindex="-1">
+        <div class="modal-dialog modal-lg">
+            <div class="modal-content">
+                <div class="modal-header bg-danger text-white">
+                    <h5 class="modal-title"><i class="bi bi-cash-stack me-2"></i>Payment Details</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+                </div>
+                <div class="modal-body" id="paymentDetails"></div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        let allPayments = [];
+        let totalAmount = 0;
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                const res = await fetch('/api/db/payments_made');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.payments && data.payments.length > 0) {
+                        allPayments = data.payments;
+                        totalAmount = data.total_amount;
+                        updateKPIs();
+                        renderPayments(allPayments);
+                        console.log('Loaded payments made from database');
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.log('Could not load from database, trying localStorage...');
+            }
+
+            const cached = localStorage.getItem('paymentsMadeData');
+            if (cached) {
+                try {
+                    const data = JSON.parse(cached);
+                    allPayments = data.payments || [];
+                    totalAmount = data.total_amount || 0;
+                    updateKPIs();
+                    renderPayments(allPayments);
+                    console.log('Loaded payments made from localStorage');
+                } catch(e) {}
+            }
+        });
+
+        function formatDate(d) {
+            if (!d || d.length !== 8) return d || '';
+            return d.slice(6,8) + '/' + d.slice(4,6) + '/' + d.slice(0,4);
+        }
+
+        function formatDateForAPI(dateInput) {
+            return dateInput.replace(/-/g, '');
+        }
+
+        async function uploadJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const btn = document.getElementById('uploadBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Uploading...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch('/api/payments_made/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const data = await res.json();
+
+                if (data.error) {
+                    alert('Error: ' + data.error);
+                } else {
+                    allPayments = data.payments || [];
+                    totalAmount = data.total_amount || 0;
+                    localStorage.setItem('paymentsMadeData', JSON.stringify({
+                        payments: allPayments,
+                        total_amount: totalAmount
+                    }));
+                    updateKPIs();
+                    renderPayments(allPayments);
+                }
+            } catch (error) {
+                alert('Upload failed: ' + error.message);
+            } finally {
+                btn.innerHTML = orig;
+                btn.disabled = false;
+                event.target.value = ''; // Reset input
+            }
+        }
+
+
+        async function fetchData() {
+            const btn = document.getElementById('importBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Importing...';
+
+            try {
+                const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+                const toDate = formatDateForAPI(document.getElementById('toDate').value);
+                const limitVal = document.getElementById('limitInput').value;
+                const limit = limitVal ? parseInt(limitVal) : null;
+
+                const res = await fetch('/api/payments_made/fetch', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ from_date: fromDate, to_date: toDate, limit: limit })
+                });
+                const data = await res.json();
+
+                if (data.error) { alert('Error: ' + data.error); return; }
+
+                await new Promise(r => setTimeout(r, 500));
+
+                try {
+                    const dbRes = await fetch('/api/db/payments_made');
+                    if (dbRes.ok) {
+                        const dbData = await dbRes.json();
+                        allPayments = dbData.payments || [];
+                        totalAmount = dbData.total_amount || 0;
+                        localStorage.setItem('paymentsMadeData', JSON.stringify(dbData));
+                    } else {
+                        allPayments = data.payments || [];
+                        totalAmount = data.total_amount || 0;
+                        localStorage.setItem('paymentsMadeData', JSON.stringify(data));
+                    }
+                } catch (err) {
+                    allPayments = data.payments || [];
+                    totalAmount = data.total_amount || 0;
+                }
+
+                updateKPIs();
+                renderPayments(allPayments);
+
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error: Make sure app.py is running.');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        }
+
+        async function syncZoho() {
+            if (!confirm("This will sync payments made to Zoho Books as Vendor Payments. Continue?")) return;
+
+            const btn = document.getElementById('syncBtn');
+            const orig = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+
+            try {
+                const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+                const toDate = formatDateForAPI(document.getElementById('toDate').value);
+                const limitVal = document.getElementById('limitInput').value;
+                const limit = limitVal ? parseInt(limitVal) : null;
+
+                const res = await fetch('/api/payments_made/sync_zoho', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ payments_made: null, from_date: fromDate, to_date: toDate, limit: limit })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    let msg = '✅ Zoho Sync Complete!\n\n';
+                    msg += `Total: ${data.total} | Success: ${data.success} | Failed: ${data.failed}\n\n`;
+                    if (data.failed > 0 && data.errors) {
+                        msg += '⚠️ Failed:\n';
+                        data.errors.forEach((e, i) => {
+                            msg += `${i+1}. #${e.payment_number} - ${e.vendor}: ${e.error}\n`;
+                        });
+                    }
+                    alert(msg);
+                } else {
+                    alert('❌ Sync Error: ' + data.message);
+                }
+            } catch (err) {
+                alert('Connection Error during Sync');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = orig;
+            }
+        }
+
+        function updateKPIs() {
+            document.getElementById('total-payments').innerText = allPayments.length;
+            document.getElementById('total-amount').innerText = '₹' + (totalAmount || 0).toLocaleString();
+        }
+
+        function getModeBadge(mode) {
+            if (!mode) return '<span class="payment-mode-badge mode-other">Unknown</span>';
+            const m = mode.toLowerCase();
+            if (m.includes('cash')) return '<span class="payment-mode-badge mode-cash">💵 Cash</span>';
+            if (m.includes('bank')) return '<span class="payment-mode-badge mode-bank">🏦 Bank</span>';
+            return '<span class="payment-mode-badge mode-other">' + mode + '</span>';
+        }
+
+        function renderPayments(payments) {
+            const tbody = document.getElementById('tableBody');
+            if (!payments || payments.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No Payments Made Found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = payments.map((p, i) => `
+                <tr style="cursor:pointer" onclick="showDetails(${i})">
+                    <td class="fw-medium text-danger">${p.payment_number || '-'}</td>
+                    <td>${formatDate(p.date)}</td>
+                    <td>${p.vendor_name || '-'}</td>
+                    <td>${getModeBadge(p.payment_mode)}</td>
+                    <td class="text-end fw-bold text-danger">₹${(p.amount || 0).toLocaleString()}</td>
+                    <td class="text-center">
+                        <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDetails(${i})">
+                            <i class="bi bi-eye"></i> View
+                        </button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function showDetails(idx) {
+            const p = allPayments[idx];
+            const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
+
+            const billRows = (p.bill_allocations || []).map(a =>
+                `<tr><td>${a.bill_type || 'Agst Ref'}</td><td><strong>${a.bill_number}</strong></td><td class="text-end">₹${(a.amount || 0).toLocaleString()}</td></tr>`
+            ).join('');
+
+            const ledgerRows = (p.ledger_entries || []).map(e =>
+                `<tr>
+                    <td>${e.ledger_name}</td>
+                    <td class="text-end ${e.amount < 0 ? 'text-danger' : 'text-success'}">
+                        ${e.amount < 0 ? '(-)' : ''}₹${Math.abs(e.amount || 0).toLocaleString()} ${e.amount < 0 ? 'Dr' : 'Cr'}
+                    </td>
+                    <td class="text-end text-muted">${e.current_balance ? '₹' + e.current_balance.toLocaleString() + ' Cr' : '-'}</td>
+                </tr>`
+            ).join('');
+
+            const costCenterRows = (p.cost_center_allocations || []).map(cc =>
+                `<tr>
+                    <td>${cc.category || 'Unknown'}</td>
+                    <td class="text-end text-danger border-start">₹${(cc.amount || 0).toLocaleString()}</td>
+                </tr>`
+            ).join('');
+
+            document.getElementById('paymentDetails').innerHTML = `
+                <div class="row g-3">
+                    <div class="col-md-6">
+                        <h6 class="text-danger border-bottom pb-2">Payment Information</h6>
+                        <table class="table table-sm">
+                            <tr><th width="40%">Payment #:</th><td>${p.payment_number || '-'}</td></tr>
+                            <tr><th>Date:</th><td>${formatDate(p.date)}</td></tr>
+                            <tr><th>Vendor:</th><td>${p.vendor_name || '-'}</td></tr>
+                            <tr><th>Amount:</th><td class="fw-bold text-danger">₹${(p.amount || 0).toLocaleString()}</td></tr>
+                        </table>
+                    </div>
+                    <div class="col-md-6">
+                        <h6 class="text-danger border-bottom pb-2">Payment Details</h6>
+                        <table class="table table-sm">
+                            <tr><th width="40%">Mode:</th><td>${getModeBadge(p.payment_mode)}</td></tr>
+                            <tr><th>Bank Account:</th><td>${p.bank_account || 'N/A'}</td></tr>
+                            <tr><th>Reference #:</th><td>${p.reference_number || 'N/A'}</td></tr>
+                            <tr><th>Against Ref:</th><td>${p.against_reference || 'N/A'}</td></tr>
+                        </table>
+                    </div>
+                </div>
+                ${p.narration ? `<div class="mt-3"><h6 class="text-danger border-bottom pb-2">Narration</h6><p class="small">${p.narration}</p></div>` : ''}
+                ${billRows ? `
+                    <div class="mt-3">
+                        <h6 class="text-danger border-bottom pb-2">Bill Allocations</h6>
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light"><tr><th>Type</th><th>Bill Number</th><th class="text-end">Amount</th></tr></thead>
+                            <tbody>${billRows}</tbody>
+                        </table>
+                    </div>` : ''}
+                ${costCenterRows ? `
+                    <div class="mt-3">
+                        <h6 class="text-danger border-bottom pb-2">Cost Center Allocations</h6>
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light"><tr><th>Category - Cost Center</th><th class="text-end">Amount</th></tr></thead>
+                            <tbody>${costCenterRows}</tbody>
+                        </table>
+                    </div>` : ''}
+                ${ledgerRows ? `
+                    <div class="mt-3">
+                        <h6 class="text-danger border-bottom pb-2">Ledger Breakdown</h6>
+                        <table class="table table-sm table-bordered">
+                            <thead class="table-light"><tr><th>Ledger</th><th class="text-end">Amount</th><th class="text-end">Balance</th></tr></thead>
+                            <tbody>${ledgerRows}<tr class="table-light fw-bold"><td>Total Paid</td><td class="text-end text-danger">₹${(p.amount || 0).toLocaleString()}</td><td></td></tr></tbody>
+                        </table>
+                    </div>` : `<div class="alert alert-info mt-3"><i class="bi bi-info-circle me-2"></i>Advance payment — no specific bill allocations.</div>`}
+            `;
+            modal.show();
+        }
+
+        function handleSearch() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            const filtered = allPayments.filter(p =>
+                (p.payment_number || '').toLowerCase().includes(q) ||
+                (p.vendor_name || '').toLowerCase().includes(q) ||
+                (p.reference_number || '').toLowerCase().includes(q)
+            );
+            renderPayments(filtered);
+        }
+    </script>
+</body>
+</html>

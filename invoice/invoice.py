@@ -11,7 +11,7 @@ from fuzzywuzzy import fuzz
 load_dotenv()
 
 TALLY_URL = "http://localhost:9000"
-BASE_URL = "https://www.zohoapis.in/books/v3"
+BASE_URL = "https://www.zohoapis.com/books/v3"
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
@@ -115,7 +115,7 @@ def get_access_token():
         "client_secret": CLIENT_SECRET,
         "grant_type": "refresh_token"
     }
-    res = requests.post("https://accounts.zoho.in/oauth/v2/token", data=payload)
+    res = requests.post("https://accounts.zoho.com/oauth/v2/token", data=payload)
     return res.json().get("access_token")
 
 def get_ledger_map_from_tally():

@@ -2,10 +2,22 @@
 import requests
 import json
 import os
+import sys
 from datetime import datetime
+from pathlib import Path
 from dotenv import load_dotenv
 from bs4 import BeautifulSoup
 from collections import defaultdict
+
+# Add parent directory to path so we can import shared database_manager
+parent_dir = Path(__file__).parent.parent
+sys.path.append(str(parent_dir))
+
+try:
+    import database_manager
+except ImportError:
+    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    database_manager = None
 
 # Load credentials
 load_dotenv()
@@ -16,7 +28,7 @@ REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
 ORGANIZATION_ID = os.getenv("ORGANIZATION_ID")
 
 # URLs
-BASE_URL = "https://www.zohoapis.in/books/v3"
+BASE_URL = "https://www.zohoapis.com/books/v3"
 TALLY_URL = "http://localhost:9000"
 
 def get_access_token():
@@ -27,7 +39,7 @@ def get_access_token():
         "client_secret": CLIENT_SECRET,
         "grant_type": "refresh_token"
     }
-    res = requests.post("https://accounts.zoho.in/oauth/v2/token", data=payload)
+    res = requests.post("https://accounts.zoho.com/oauth/v2/token", data=payload)
     return res.json().get("access_token")
 
 # ----------------------------------------------------------
@@ -148,7 +160,7 @@ def save_ledger_map_to_cache(ledger_map, groups_dict):
 # ----------------------------------------------------------
 
 def save_zoho_contacts_to_cache(contact_map):
-    """Save Zoho contacts to SQLite cache"""
+    """Save Zoho contacts to SQLite cache (org-aware)"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -169,21 +181,33 @@ def save_zoho_contacts_to_cache(contact_map):
                 contact_info["contact_type"]
             ))
         
-        # Update metadata
+        # Update metadata — store org_id so we detect org switches
         cursor.execute("INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
                      ("zoho_contacts_updated", datetime.now().isoformat()))
+        cursor.execute("INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
+                     ("zoho_contacts_org_id", ORGANIZATION_ID))
         
         conn.commit()
         conn.close()
-        print(f"   💾 Cached {len(contact_map)} Zoho contacts to database")
+        print(f"   💾 Cached {len(contact_map)} Zoho contacts to database (org: {ORGANIZATION_ID})")
     except Exception as e:
         print(f"   ⚠️  Failed to cache Zoho contacts: {e}")
 
 def get_zoho_contacts_from_cache():
-    """Get Zoho contacts from SQLite cache"""
+    """Get Zoho contacts from SQLite cache — returns None if org has changed"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
+        
+        # Check if cache belongs to the current organization
+        cursor.execute("SELECT value FROM cache_metadata WHERE key = 'zoho_contacts_org_id'")
+        row = cursor.fetchone()
+        cached_org_id = row[0] if row else None
+        
+        if cached_org_id != ORGANIZATION_ID:
+            conn.close()
+            print(f"   🔄 Organization changed ({cached_org_id} → {ORGANIZATION_ID}) — clearing contacts cache")
+            return None  # Force fresh fetch
         
         cursor.execute("SELECT contact_id, contact_name, contact_name_lower, contact_type FROM zoho_contacts")
         rows = cursor.fetchall()
@@ -197,14 +221,14 @@ def get_zoho_contacts_from_cache():
                     "original_name": contact_name,
                     "contact_type": contact_type
                 }
-            print(f"   ✅ Loaded {len(contact_map)} Zoho contacts from cache")
+            print(f"   ✅ Loaded {len(contact_map)} Zoho contacts from cache (org: {ORGANIZATION_ID})")
             return contact_map
         return None
     except:
         return None
 
 def save_zoho_accounts_to_cache(account_map):
-    """Save Zoho accounts to SQLite cache"""
+    """Save Zoho accounts to SQLite cache (org-aware)"""
     try:
         conn = sqlite3.connect(DB_FILE)
         cursor = conn.cursor()
@@ -220,9 +244,11 @@ def save_zoho_accounts_to_cache(account_map):
                 VALUES (?, ?)
             """, (account_id, account_name_lower))
         
-        # Update metadata
+        # Store org_id so we detect org switches
         cursor.execute("INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
                      ("zoho_accounts_updated", datetime.now().isoformat()))
+        cursor.execute("INSERT OR REPLACE INTO cache_metadata (key, value) VALUES (?, ?)",
+                     ("zoho_accounts_org_id", ORGANIZATION_ID))
         
         conn.commit()
         conn.close()
@@ -859,37 +885,86 @@ if __name__ == "__main__":
 
 def get_all_journals_data(from_date="20250401", to_date="20250430", limit=None):
     """
-    Wrapper function for API to get journal data
-    Returns formatted data for frontend display
+    Wrapper function for API to get journal data.
+    Fetches from Tally, saves ALL fields to SQLite DB, returns formatted data
+    for frontend display.  Mirrors get_all_receipts_data() pattern exactly.
     """
+    # Ensure DB tables exist
+    if database_manager:
+        database_manager.init_db()
+
     try:
         journals = fetch_tally_journals(from_date, to_date, limit)
-        
+
         if not journals:
             return None
-        
-        # Calculate stats
+
+        # ----------------------------------------------------------------
+        # SAVE EVERY FIELD TO SQLITE  (same pattern as get_all_receipts_data)
+        # ----------------------------------------------------------------
+        if database_manager and journals:
+            now = datetime.now().isoformat()
+            db_data_list = []
+
+            for journal in journals:
+                line_items = journal.get("line_items", [])
+
+                # Compute debit / credit totals from line_items
+                total_debit  = sum(
+                    item["amount"] for item in line_items
+                    if item.get("debit_or_credit") == "debit"
+                )
+                total_credit = sum(
+                    item["amount"] for item in line_items
+                    if item.get("debit_or_credit") == "credit"
+                )
+
+                # line_items JSON captures ALL per-line fields:
+                #   ledger_name, ledger_type, amount, debit_or_credit,
+                #   tag_category, tag_option  (nothing skipped)
+                db_data_list.append({
+                    "journal_number": journal.get("journal_number", ""),
+                    "date":           journal.get("date", ""),
+                    "narration":      journal.get("narration", ""),
+                    "total_debit":    round(total_debit,  2),
+                    "total_credit":   round(total_credit, 2),
+                    # JSON-stringify the full line_items list — same as invoice_allocations in receipts
+                    "line_items":     json.dumps(line_items),
+                    "from_date":      from_date,
+                    "to_date":        to_date,
+                    "created_at":     now,
+                    "updated_at":     now,
+                })
+
+            # Bulk-save to prevent 'database is locked' errors
+            database_manager.bulk_save_journals(db_data_list)
+            print(f"💾 Saved {len(journals)} journals to database")
+
+        # ----------------------------------------------------------------
+        # Build return stats (same as before)
+        # ----------------------------------------------------------------
         total_journals = len(journals)
-        total_debit = 0
-        total_credit = 0
-        
+        total_debit_all  = 0
+        total_credit_all = 0
+
         for journal in journals:
             for item in journal.get("line_items", []):
                 if item["debit_or_credit"] == "debit":
-                    total_debit += item["amount"]
+                    total_debit_all  += item["amount"]
                 else:
-                    total_credit += item["amount"]
-        
+                    total_credit_all += item["amount"]
+
         return {
             "journals": journals,
             "stats": {
                 "total_journals": total_journals,
-                "total_debit": round(total_debit, 2),
-                "total_credit": round(total_credit, 2),
-                "from_date": from_date,
-                "to_date": to_date
+                "total_debit":    round(total_debit_all,  2),
+                "total_credit":   round(total_credit_all, 2),
+                "from_date":      from_date,
+                "to_date":        to_date
             }
         }
+
     except Exception as e:
         print(f"❌ Error in get_all_journals_data: {e}")
         return None
@@ -918,13 +993,33 @@ def sync_journals_to_zoho(selected_journals=None, from_date="20250401", to_date=
         contact_map = get_zoho_contacts(token)
         
         # Get journals to sync
-        if not selected_journals:
-            journals_to_sync = fetch_tally_journals(from_date, to_date, limit)
-        else:
+        journals_to_sync = []
+        if selected_journals:
             journals_to_sync = selected_journals
             # Apply limit if provided
             if limit and len(journals_to_sync) > limit:
                 journals_to_sync = journals_to_sync[:limit]
+        else:
+            # If no specific journals are selected, try to get them from the DB first
+            if database_manager:
+                db_journals = database_manager.get_journals_by_date_range(from_date, to_date, limit)
+                if db_journals:
+                    print(f"📊 Found {len(db_journals)} journals in database for sync.")
+                    # Parse line_items from JSON string back to list of dicts
+                    for journal in db_journals:
+                        if "line_items" in journal and isinstance(journal["line_items"], str):
+                            try:
+                                journal["line_items"] = json.loads(journal["line_items"])
+                            except json.JSONDecodeError:
+                                print(f"❌ Error decoding line_items for journal {journal.get('journal_number')}")
+                                journal["line_items"] = [] # Fallback to empty list
+                    journals_to_sync = db_journals
+                else:
+                    print("📊 No journals found in database. Fetching from Tally...")
+                    journals_to_sync = fetch_tally_journals(from_date, to_date, limit)
+            else:
+                print("📊 Database manager not available. Fetching from Tally...")
+                journals_to_sync = fetch_tally_journals(from_date, to_date, limit)
         
         if not journals_to_sync:
             return {"status": "error", "message": "No journals to sync"}

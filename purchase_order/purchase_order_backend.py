@@ -1,5 +1,8 @@
 import os
+import sys
 import requests
+from datetime import datetime
+from pathlib import Path
 from bs4 import BeautifulSoup
 from collections import defaultdict
 from dotenv import load_dotenv
@@ -7,11 +10,20 @@ import json
 import re
 from fuzzywuzzy import fuzz
 
+# Add parent directory so we can import shared database_manager
+sys.path.append(str(Path(__file__).parent.parent))
+
+try:
+    import database_manager
+except ImportError:
+    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    database_manager = None
+
 # Load environment variables
 load_dotenv()
 
 TALLY_URL = "http://localhost:9000"
-BASE_URL = "https://www.zohoapis.in/books/v3"
+BASE_URL = "https://www.zohoapis.com/books/v3"
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
@@ -390,7 +402,7 @@ def fetch_tally_purchase_orders(purchase_order_number="1"):
 
 def get_access_token():
     """Get Zoho OAuth access token"""
-    url = "https://accounts.zoho.in/oauth/v2/token"
+    url = "https://accounts.zoho.com/oauth/v2/token"
     params = {
         "refresh_token": REFRESH_TOKEN,
         "client_id": CLIENT_ID,
@@ -1203,47 +1215,67 @@ def fetch_tally_purchase_orders_range(from_date="20250401", to_date="20250430", 
 
 def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_date="20250430", limit=None):
     """
-    Sync purchase orders to Zoho Books
-    
-    Args:
-        selected_orders: List of purchase order objects to sync (if None, fetches from Tally)
-        from_date: Start date in YYYYMMDD format
-        to_date: End date in YYYYMMDD format
-        limit: Maximum number of purchase orders to sync
+    Sync purchase orders to Zoho Books.
+
+    Priority order for data source:
+      1. selected_orders     — passed directly from frontend (selected rows)
+      2. DB (tally_data.db)  — read previously-fetched data, NO second Tally port call
+      3. Tally port          — fallback only if DB is also empty for the range
     """
     try:
         print("🚀 Starting Zoho Sync (Purchase Orders)...")
-        
-        # Get access token
+
         token = get_access_token()
         if not token:
             return {"status": "error", "message": "Failed to get access token"}
-        
-        # Get Zoho data
-        contact_map = get_zoho_contacts(token)
-        account_map = get_zoho_accounts(token)
-        payment_terms_map = get_zoho_payment_terms_list(token)
-        tax_map = get_zoho_taxes(token)
-        tag_map = get_zoho_tags(token)
-        item_map = get_zoho_items(token)
-        
-        # Get purchase orders to sync
-        if not selected_orders:
-            orders_to_sync = fetch_tally_purchase_orders_range(from_date, to_date, limit)
-        else:
+
+        contact_map      = get_zoho_contacts(token)
+        account_map      = get_zoho_accounts(token)
+        payment_terms_map= get_zoho_payment_terms_list(token)
+        tax_map          = get_zoho_taxes(token)
+        tag_map          = get_zoho_tags(token)
+        item_map         = get_zoho_items(token)
+
+        # ----------------------------------------------------------------
+        # DETERMINE WHAT TO SYNC
+        # ----------------------------------------------------------------
+        if selected_orders:
             orders_to_sync = selected_orders
             if limit and len(orders_to_sync) > limit:
                 orders_to_sync = orders_to_sync[:limit]
-        
+            print(f"📊 Using {len(orders_to_sync)} selected purchase order(s) from frontend")
+
+        else:
+            orders_to_sync = []
+            if database_manager:
+                db_rows = database_manager.get_purchase_orders_by_date_range(from_date, to_date)
+                if db_rows:
+                    for row in db_rows:
+                        for field in ('vendor_address', 'line_items', 'taxes'):
+                            if row.get(field) and isinstance(row[field], str):
+                                try:
+                                    row[field] = json.loads(row[field])
+                                except Exception:
+                                    row[field] = []
+                    if limit:
+                        db_rows = db_rows[:limit]
+                    orders_to_sync = db_rows
+                    print(f"📊 Loaded {len(orders_to_sync)} purchase order(s) from DB (no Tally call needed)")
+
+            if not orders_to_sync:
+                print("🔄 DB empty for range — fetching from Tally port as fallback...")
+                orders_to_sync = fetch_tally_purchase_orders_range(from_date, to_date, limit)
+
         if not orders_to_sync:
             return {"status": "error", "message": "No purchase orders to sync"}
-        
+
         print(f"📊 Syncing {len(orders_to_sync)} purchase order(s) to Zoho Books...")
-        
+
         stats = {"created": 0, "failed": 0, "errors": []}
-        
+
         for po in orders_to_sync:
-            result = create_zoho_purchase_order(token, po, contact_map, account_map, payment_terms_map, tax_map, tag_map, item_map)
+            result = create_zoho_purchase_order(token, po, contact_map, account_map,
+                                                payment_terms_map, tax_map, tag_map, item_map)
             if result.get("success"):
                 stats["created"] += 1
                 print(f"✅ Synced Purchase Order #{po['purchase_order_number']}")
@@ -1251,16 +1283,104 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
                 stats["failed"] += 1
                 stats["errors"].append({
                     "purchase_order_number": po['purchase_order_number'],
-                    "vendor": po['vendor_name'],
-                    "error": result.get("error", "Unknown error")
+                    "vendor":               po['vendor_name'],
+                    "error":                result.get("error", "Unknown error")
                 })
-                print(f"❌ Failed Purchase Order #{po['purchase_order_number']}")
-        
+                print(f"❌ Failed Purchase Order #{po['purchase_order_number']}: {result.get('error')}")
+
         return {"status": "success", "stats": stats}
-        
+
     except Exception as e:
         print(f"❌ Error in sync_purchase_orders_to_zoho: {e}")
         return {"status": "error", "message": str(e)}
+
+
+def get_all_purchase_orders_data(from_date="20250401", to_date="20250430", limit=None):
+    """
+    Wrapper function for API to get purchase order data.
+    Fetches from Tally, saves ALL fields to SQLite DB, returns formatted data
+    for frontend display.  Mirrors get_all_receipts_data() pattern exactly.
+    NOT A SINGLE FIELD IS SKIPPED.
+    """
+    if database_manager:
+        database_manager.init_db()
+
+    try:
+        orders = fetch_tally_purchase_orders_range(from_date, to_date, limit)
+
+        if not orders:
+            return None
+
+        # ----------------------------------------------------------------
+        # SAVE EVERY FIELD TO SQLITE
+        # ----------------------------------------------------------------
+        if database_manager and orders:
+            now = datetime.now().isoformat()
+            db_data_list = []
+
+            for po in orders:
+                db_data_list.append({
+                    # --- Voucher identity ---
+                    "purchase_order_number": po.get("purchase_order_number", ""),
+                    "date":                  po.get("date", ""),
+                    "vendor_name":           po.get("vendor_name", ""),
+
+                    # --- Header fields ---
+                    "reference_number": po.get("reference_number", ""),
+                    # vendor_address is a list — JSON stringify it
+                    "vendor_address":   json.dumps(po.get("vendor_address", [])),
+                    "payment_terms":    po.get("payment_terms", ""),
+                    "order_status":     po.get("order_status", ""),
+                    "purchase_ledger":  po.get("purchase_ledger", ""),
+                    "narration":        po.get("narration", ""),
+
+                    # --- line_items: each element has
+                    #     item_name, quantity, rate, discount,
+                    #     amount, category, cost_centre
+                    "line_items": json.dumps(po.get("line_items", [])),
+
+                    # --- taxes: each element has
+                    #     tax_name, tax_type, tax_rate, tax_amount
+                    "taxes": json.dumps(po.get("taxes", [])),
+
+                    # --- Totals ---
+                    "rounding_off": po.get("rounding_off", 0) or 0,
+                    "subtotal":     po.get("subtotal",     0) or 0,
+                    "tax_total":    po.get("tax_total",    0) or 0,
+                    "total_amount": po.get("total_amount", 0) or 0,
+
+                    # --- Fetch range & timestamps ---
+                    "from_date":  from_date,
+                    "to_date":    to_date,
+                    "created_at": now,
+                    "updated_at": now,
+                })
+
+            database_manager.bulk_save_purchase_orders(db_data_list)
+            print(f"💾 Saved {len(orders)} purchase orders to database")
+
+        # ----------------------------------------------------------------
+        # Build return stats
+        # ----------------------------------------------------------------
+        total_orders = len(orders)
+        total_amount = sum(po.get("total_amount", 0) for po in orders)
+
+        return {
+            "purchase_orders": orders,
+            "stats": {
+                "total_orders": total_orders,
+                "total_amount": round(total_amount, 2),
+                "from_date":    from_date,
+                "to_date":      to_date
+            }
+        }
+
+    except Exception as e:
+        print(f"❌ Error in get_all_purchase_orders_data: {e}")
+        import traceback
+        traceback.print_exc()
+        return None
+
 
 def main():
     """Main function to migrate Purchase Order from Tally to Zoho Books"""

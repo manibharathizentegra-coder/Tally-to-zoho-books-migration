@@ -11,6 +11,13 @@ from pathlib import Path
 # Add parent directory to path to access shared cache
 sys.path.append(str(Path(__file__).parent.parent))
 
+# Import database manager
+try:
+    import database_manager
+except ImportError:
+    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    database_manager = None
+
 # Import shared cache functions from journel module
 from journel.journel_backend import (
     get_access_token,
@@ -27,7 +34,7 @@ REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
 ORGANIZATION_ID = os.getenv("ORGANIZATION_ID")
 
 # URLs
-BASE_URL = "https://www.zohoapis.in/books/v3"
+BASE_URL = "https://www.zohoapis.com/books/v3"
 TALLY_URL = "http://localhost:9000"
 
 def fetch_tally_invoices(from_date="20250401", to_date="20250430", limit=None):
@@ -274,67 +281,92 @@ def get_payment_terms_hierarchical(voucher, party_name):
 
 def sync_invoices_to_zoho(selected_invoices=None, from_date="20250401", to_date="20250430", limit=None):
     """
-    Sync invoices to Zoho Books
-    
-    Args:
-        selected_invoices: List of invoice objects to sync (if None, fetches from Tally)
-        from_date: Start date in YYYYMMDD format
-        to_date: End date in YYYYMMDD format
-        limit: Maximum number of invoices to sync
+    Sync invoices to Zoho Books.
+
+    Priority order for data source:
+      1. selected_invoices   — passed directly from frontend (selected rows)
+      2. DB (tally_data.db)  — read previously-fetched data, NO Tally port call
+      3. Tally port          — fallback only if DB is also empty
+
+    This means 'Sync All' re-uses data already saved in the DB by
+    'Import Invoices', avoiding a second Tally XML request.
     """
     try:
         print("🚀 Starting Zoho Sync (Invoices)...")
-        
+
         # Get access token
         token = get_access_token()
         if not token:
             return {"status": "error", "message": "Failed to get access token"}
-        
+
         # Force refresh contacts to get latest structure
         print("   🔄 Refreshing contacts from Zoho Books...")
         contact_map = get_zoho_contacts(token, use_cache=False, force_refresh=True)
         print(f"   ✅ Loaded {len(contact_map)} contacts")
-        
-        # Get invoices to sync
-        if not selected_invoices:
-            invoices_to_sync = fetch_tally_invoices(from_date, to_date, limit)
-        else:
+
+        # ----------------------------------------------------------------
+        # DETERMINE WHAT TO SYNC
+        # ----------------------------------------------------------------
+        if selected_invoices:
+            # 1. Explicit selection from frontend — use as-is
             invoices_to_sync = selected_invoices
             if limit and len(invoices_to_sync) > limit:
                 invoices_to_sync = invoices_to_sync[:limit]
-        
+            print(f"📊 Using {len(invoices_to_sync)} selected invoice(s) from frontend")
+
+        else:
+            # 2. Try DB first (avoids second Tally port call)
+            invoices_to_sync = []
+            if database_manager:
+                db_rows = database_manager.get_invoices_by_date_range(from_date, to_date)
+                if db_rows:
+                    # Parse JSON fields back to objects
+                    for row in db_rows:
+                        for field in ('buyer_address', 'line_items', 'taxes'):
+                            if row.get(field) and isinstance(row[field], str):
+                                try:
+                                    row[field] = json.loads(row[field])
+                                except Exception:
+                                    row[field] = []
+                    invoices_to_sync = db_rows
+                    if limit:
+                        invoices_to_sync = invoices_to_sync[:limit]
+                    print(f"📊 Loaded {len(invoices_to_sync)} invoice(s) from DB (no Tally call needed)")
+
+            # 3. Fallback: hit Tally port if DB was empty
+            if not invoices_to_sync:
+                print("🔄 DB empty for range — fetching from Tally port as fallback...")
+                invoices_to_sync = fetch_tally_invoices(from_date, to_date, limit)
+
         if not invoices_to_sync:
             return {"status": "error", "message": "No invoices to sync"}
-        
+
         print(f"📊 Syncing {len(invoices_to_sync)} invoice(s) to Zoho Books...")
-        
+
         stats = {"created": 0, "failed": 0, "errors": []}
-        
+
         for invoice in invoices_to_sync:
             result = create_zoho_invoice(token, invoice, contact_map)
             if result["success"]:
                 stats["created"] += 1
                 print(f"✅ Synced Invoice #{invoice['invoice_number']}")
             else:
-                # Skip error and continue with next invoice
                 stats["failed"] += 1
-                error_info = {
+                stats["errors"].append({
                     "invoice_number": invoice['invoice_number'],
-                    "customer": invoice['customer_name'],
-                    "error": result["error"]
-                }
-                stats["errors"].append(error_info)
-                print(f"❌ Failed Invoice #{invoice['invoice_number']}")
-                print(f"❌ Error: {result['error']}")
-                print(f"⏭️  Skipping to next invoice...\n")
-        
+                    "customer":       invoice['customer_name'],
+                    "error":          result["error"]
+                })
+                print(f"❌ Failed Invoice #{invoice['invoice_number']}: {result['error']}")
+
         return {"status": "success", "stats": stats}
-        
+
     except Exception as e:
         print(f"❌ Error in sync_invoices_to_zoho: {e}")
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
+
 
 def get_zoho_payment_terms_list(token):
     """Fetch all payment terms from Zoho Books"""
@@ -580,28 +612,92 @@ def create_zoho_invoice(token, invoice_data, contact_map):
 
 def get_all_invoices_data(from_date="20250401", to_date="20250430", limit=None):
     """
-    Wrapper function for API to get invoice data
-    Returns formatted data for frontend display
+    Wrapper function for API to get invoice data.
+    Fetches from Tally, saves ALL fields to SQLite DB, returns formatted data
+    for frontend display.  Mirrors get_all_receipts_data() pattern exactly.
     """
+    # Ensure DB tables exist
+    if database_manager:
+        database_manager.init_db()
+
     try:
         invoices = fetch_tally_invoices(from_date, to_date, limit)
-        
+
         if not invoices:
             return None
-        
-        # Calculate stats
+
+        # ----------------------------------------------------------------
+        # SAVE EVERY FIELD TO SQLITE
+        # Complex list fields — buyer_address, line_items, taxes —
+        # are JSON-serialised exactly like invoice_allocations in receipts.
+        # NOT A SINGLE FIELD IS SKIPPED.
+        # ----------------------------------------------------------------
+        if database_manager and invoices:
+            now = datetime.now().isoformat()
+            db_data_list = []
+
+            for inv in invoices:
+                db_data_list.append({
+                    # --- Voucher identity ---
+                    "invoice_number": inv.get("invoice_number", ""),
+                    "date":           inv.get("date", ""),
+                    "customer_name":  inv.get("customer_name", ""),
+
+                    # --- Header fields ---
+                    "po_number":     inv.get("po_number", ""),
+                    # buyer_address is a list — JSON stringify it
+                    "buyer_address": json.dumps(inv.get("buyer_address", [])),
+                    "payment_terms": inv.get("payment_terms", ""),
+                    "sales_ledger":  inv.get("sales_ledger", ""),
+                    "narration":     inv.get("narration", ""),
+
+                    # --- e-Invoice / IRN fields ---
+                    "irn":         inv.get("irn", ""),
+                    "irn_ack_no":  inv.get("irn_ack_no", ""),
+                    "irn_ack_date":inv.get("irn_ack_date", ""),
+
+                    # --- line_items: each element has
+                    #     item_name, quantity, rate, discount,
+                    #     amount, category, cost_centre
+                    "line_items": json.dumps(inv.get("line_items", [])),
+
+                    # --- taxes: each element has
+                    #     tax_name, tax_type, tax_rate, tax_amount
+                    "taxes": json.dumps(inv.get("taxes", [])),
+
+                    # --- Totals ---
+                    "rounding_off": inv.get("rounding_off", 0) or 0,
+                    "subtotal":     inv.get("subtotal",     0) or 0,
+                    "tax_total":    inv.get("tax_total",    0) or 0,
+                    "total_amount": inv.get("total_amount", 0) or 0,
+
+                    # --- Fetch range & timestamps ---
+                    "from_date":  from_date,
+                    "to_date":    to_date,
+                    "created_at": now,
+                    "updated_at": now,
+                })
+
+            # Bulk-save to prevent 'database is locked' errors
+            database_manager.bulk_save_invoices(db_data_list)
+            print(f"💾 Saved {len(invoices)} invoices to database")
+
+        # ----------------------------------------------------------------
+        # Build return stats
+        # ----------------------------------------------------------------
         total_invoices = len(invoices)
-        total_amount = sum(inv.get("total_amount", 0) for inv in invoices)
-        
+        total_amount   = sum(inv.get("total_amount", 0) for inv in invoices)
+
         return {
             "invoices": invoices,
             "stats": {
                 "total_invoices": total_invoices,
-                "total_amount": round(total_amount, 2),
-                "from_date": from_date,
-                "to_date": to_date
+                "total_amount":   round(total_amount, 2),
+                "from_date":      from_date,
+                "to_date":        to_date
             }
         }
+
     except Exception as e:
         print(f"❌ Error in get_all_invoices_data: {e}")
         import traceback

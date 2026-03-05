@@ -4,17 +4,17 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Journals - Tally Software</title>
-    
+
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    
+
     <style>
         body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
         .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
-        
+
         .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
         .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
@@ -22,6 +22,13 @@
 
         .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
         .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
+
+        /* Month pill buttons */
+        .month-pill { border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 500;
+                      border: 1.5px solid #dee2e6; background: #fff; cursor: pointer; transition: all .15s; }
+        .month-pill:hover  { background: #5e35b1; color: #fff; border-color: #5e35b1; }
+        .month-pill.active { background: #5e35b1; color: #fff; border-color: #5e35b1; box-shadow: 0 2px 6px rgba(94,53,177,.35); }
+        .month-filter-bar  { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 16px; background: #f8f9ff; border-top: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -34,64 +41,47 @@
         </a>
         <div class="collapse navbar-collapse ms-4">
             <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+                <li class="nav-item me-3"><a class="nav-link" href="/ledgers"><i class="bi bi-journal-text me-1"></i> Ledgers</a></li>
+                <li class="nav-item me-3"><a class="nav-link" href="/items"><i class="bi bi-box-seam me-1"></i> Items</a></li>
+                <li class="nav-item me-3"><a class="nav-link active" href="/journals"><i class="bi bi-journal-bookmark me-1"></i> Journals</a></li>
+                <li class="nav-item me-3"><a class="nav-link" href="/invoices"><i class="bi bi-receipt me-1"></i> Invoices</a></li>
+                <li class="nav-item me-3"><a class="nav-link" href="/bills"><i class="bi bi-file-earmark-text me-1"></i> Bills</a></li>
+                <li class="nav-item me-3"><a class="nav-link" href="/receipts"><i class="bi bi-cash-coin me-1"></i> Payment Received</a></li>
                 <li class="nav-item me-3">
-                    <a class="nav-link" href="/ledgers">
-                        <i class="bi bi-journal-text me-1"></i> Ledgers
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/items">
-                        <i class="bi bi-box-seam me-1"></i> Items
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link active" href="/journals">
-                        <i class="bi bi-journal-bookmark me-1"></i> Journals
+                    <a class="nav-link" href="/payments_made">
+                        <i class="bi bi-cash-stack me-1"></i> Payments Made
                     </a>
                 </li>
                 <li class="nav-item me-3">
-                    <a class="nav-link" href="/invoices">
-                        <i class="bi bi-receipt me-1"></i> Invoices
-                    </a>
+                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
                 </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/bills">
-                        <i class="bi bi-file-earmark-text me-1"></i> Bills
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/receipts">
-                        <i class="bi bi-cash-coin me-1"></i> Payment Received
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/sales_orders">
-                        <i class="bi bi-cart-check me-1"></i> Sales Orders
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/purchase_orders">
-                        <i class="bi bi-bag-check me-1"></i> Purchase Orders
-                    </a>
-                </li>
+                <li class="nav-item me-3"><a class="nav-link" href="/sales_orders"><i class="bi bi-cart-check me-1"></i> Sales Orders</a></li>
+                <li class="nav-item me-3"><a class="nav-link" href="/purchase_orders"><i class="bi bi-bag-check me-1"></i> Purchase Orders</a></li>
+                <li class="nav-item"><a class="nav-link" href="/opening-balance"><i class="bi bi-bank me-1"></i> Opening Balance</a></li>
             </ul>
         </div>
     </nav>
 
     <div class="container-fluid py-4 px-4">
-        
+
         <!-- HEADER & ACTIONS -->
         <div class="d-flex justify-content-between align-items-center mb-4">
             <div>
                 <h4 class="fw-bold mb-1">Journal Entries</h4>
                 <p class="text-muted small mb-0">View and sync journal vouchers from Tally to Zoho Books</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
+                <button onclick="insertSelected()" id="insertSelectedBtn" class="btn btn-success d-flex align-items-center" disabled>
+                    <i class="bi bi-check2-square me-2"></i> Insert Selected
+                </button>
+                <button onclick="insertFiltered()" id="insertFilteredBtn" class="btn btn-info text-white d-flex align-items-center" disabled>
+                    <i class="bi bi-calendar2-check me-2"></i> Insert Month Filter
+                </button>
                 <button onclick="refreshCache()" class="btn btn-outline-secondary d-flex align-items-center" title="Refresh ledger cache from Tally">
                     <i class="bi bi-arrow-clockwise me-2"></i> Refresh Cache
                 </button>
                 <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
-                    <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+                    <i class="bi bi-arrow-repeat me-2"></i> Sync All to Zoho
                 </button>
                 <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
                     <i class="bi bi-cloud-download me-2"></i> Import Journals
@@ -99,26 +89,67 @@
             </div>
         </div>
 
-        <!-- DATE RANGE SELECTOR -->
-        <div class="content-card mb-4 p-3">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">From Date</label>
-                    <input type="date" id="fromDate" class="form-control" value="2025-04-01">
+        <!-- DATE RANGE + MONTH FILTER -->
+        <div class="content-card mb-4">
+            <div class="p-3">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">From Date</label>
+                        <input type="date" id="fromDate" class="form-control" value="2025-04-01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">To Date</label>
+                        <input type="date" id="toDate" class="form-control" value="2025-04-30">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Limit (optional)</label>
+                        <input type="number" id="limitInput" class="form-control" placeholder="All">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Filter by Month</label>
+                        <select id="monthFilter" class="form-select" onchange="applyMonthFilter()">
+                            <option value="">All Months</option>
+                            <option value="202504">April 2025</option>
+                            <option value="202505">May 2025</option>
+                            <option value="202506">June 2025</option>
+                            <option value="202507">July 2025</option>
+                            <option value="202508">August 2025</option>
+                            <option value="202509">September 2025</option>
+                            <option value="202510">October 2025</option>
+                            <option value="202511">November 2025</option>
+                            <option value="202512">December 2025</option>
+                            <option value="202601">January 2026</option>
+                            <option value="202602">February 2026</option>
+                            <option value="202603">March 2026</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button onclick="fetchData()" class="btn btn-secondary w-100">
+                            <i class="bi bi-funnel me-2"></i> Apply Filter
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">To Date</label>
-                    <input type="date" id="toDate" class="form-control" value="2025-04-30">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-bold">Limit (optional)</label>
-                    <input type="number" id="limitInput" class="form-control" placeholder="All">
-                </div>
-                <div class="col-md-4">
-                    <button onclick="fetchData()" class="btn btn-secondary w-100">
-                        <i class="bi bi-funnel me-2"></i> Apply Filter
-                    </button>
-                </div>
+            </div>
+
+            <!-- QUICK MONTH PILLS -->
+            <div class="month-filter-bar">
+                <span class="text-muted small fw-bold me-1"><i class="bi bi-calendar3 me-1"></i>Quick:</span>
+                <button class="month-pill" onclick="quickMonth('202504')">Apr</button>
+                <button class="month-pill" onclick="quickMonth('202505')">May</button>
+                <button class="month-pill" onclick="quickMonth('202506')">Jun</button>
+                <button class="month-pill" onclick="quickMonth('202507')">Jul</button>
+                <button class="month-pill" onclick="quickMonth('202508')">Aug</button>
+                <button class="month-pill" onclick="quickMonth('202509')">Sep</button>
+                <button class="month-pill" onclick="quickMonth('202510')">Oct</button>
+                <button class="month-pill" onclick="quickMonth('202511')">Nov</button>
+                <button class="month-pill" onclick="quickMonth('202512')">Dec</button>
+                <button class="month-pill" onclick="quickMonth('202601')">Jan</button>
+                <button class="month-pill" onclick="quickMonth('202602')">Feb</button>
+                <button class="month-pill" onclick="quickMonth('202603')">Mar</button>
+                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="clearMonthFilter()">
+                    <i class="bi bi-x-circle me-1"></i>Clear
+                </button>
+                <span id="activeMonthBadge" class="badge bg-primary ms-2" style="display:none;"></span>
             </div>
         </div>
 
@@ -144,19 +175,32 @@
             </div>
         </div>
 
-        <!-- CONTENT -->
+        <!-- SELECTION INFO BAR -->
+        <div id="selectionBar" class="alert alert-success d-flex align-items-center justify-content-between py-2 px-3 mb-3" style="display:none; border-radius:10px;">
+            <span><i class="bi bi-check2-square me-2"></i><strong id="selectedCount">0</strong> journal(s) selected</span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-success" onclick="selectAllVisible(true)">Select All Visible</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="selectAllVisible(false)">Clear Selection</button>
+            </div>
+        </div>
+
+        <!-- CONTENT TABLE -->
         <div class="content-card">
-            <div class="p-3 border-bottom bg-light d-flex justify-content-between">
+            <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
                 <div class="input-group" style="max-width: 300px;">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search journals..." onkeyup="handleSearch()">
+                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search journals..." onkeyup="applyFilters()">
                 </div>
+                <div id="filterStatus" class="text-muted small"></div>
             </div>
 
             <div class="table-responsive" style="max-height: 600px;">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="sticky-top">
                         <tr>
+                            <th style="width:40px;">
+                                <input type="checkbox" id="selectAllChk" class="form-check-input" title="Select / Deselect All" onchange="selectAllVisible(this.checked)">
+                            </th>
                             <th>Journal #</th>
                             <th>Date</th>
                             <th>Narration</th>
@@ -167,7 +211,7 @@
                     </thead>
                     <tbody id="tableBody">
                         <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">
+                            <td colspan="7" class="text-center py-5 text-muted">
                                 <i class="bi bi-journal-bookmark fs-1 mb-2"></i><br>
                                 Click "Import Journals" to fetch data
                             </td>
@@ -196,18 +240,58 @@
     <!-- SCRIPTS -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        let allJournals = [];
-        let stats = {};
+        let allJournals     = [];
+        let stats           = {};
+        let currentFiltered = [];
+        let activeMonth     = '';
 
-        // Load data on startup
-        document.addEventListener('DOMContentLoaded', () => {
+        const MONTH_NAMES = {
+            '202504':'April 2025',    '202505':'May 2025',      '202506':'June 2025',
+            '202507':'July 2025',     '202508':'August 2025',   '202509':'September 2025',
+            '202510':'October 2025',  '202511':'November 2025', '202512':'December 2025',
+            '202601':'January 2026',  '202602':'February 2026', '202603':'March 2026'
+        };
+
+        // Load cached data on startup — priority: localStorage → DB → empty
+        document.addEventListener('DOMContentLoaded', async () => {
             const cached = localStorage.getItem('journalsData');
             if (cached) {
-                const data = JSON.parse(cached);
-                allJournals = data.journals;
-                stats = data.stats;
-                updateKPIs(stats);
-                renderJournals(allJournals);
+                try {
+                    const data = JSON.parse(cached);
+                    allJournals = data.journals || [];
+                    stats       = data.stats   || {};
+                    updateKPIs(stats);
+                    renderJournals(allJournals);
+                    return;   // localStorage had data, done
+                } catch(e) {
+                    localStorage.removeItem('journalsData');  // corrupted, clear it
+                }
+            }
+
+            // localStorage empty — try the DB (no Tally call needed)
+            try {
+                const res  = await fetch('/api/db/journals');
+                const data = await res.json();
+                if (data.journals && data.journals.length > 0) {
+                    allJournals = data.journals;
+                    // Build stats from DB response
+                    let totalDebit = 0, totalCredit = 0;
+                    allJournals.forEach(j => {
+                        (j.line_items || []).forEach(item => {
+                            if (item.debit_or_credit === 'debit') totalDebit  += (item.amount || 0);
+                            else                                   totalCredit += (item.amount || 0);
+                        });
+                    });
+                    stats = {
+                        total_journals: allJournals.length,
+                        total_debit:    totalDebit,
+                        total_credit:   totalCredit
+                    };
+                    updateKPIs(stats);
+                    renderJournals(allJournals);
+                }
+            } catch(e) {
+                console.warn('DB load failed, Tally import needed:', e);
             }
         });
 
@@ -216,10 +300,9 @@
             return `${tallyDate.slice(6,8)}/${tallyDate.slice(4,6)}/${tallyDate.slice(0,4)}`;
         }
 
-        function formatDateForAPI(dateInput) {
-            return dateInput.replace(/-/g, '');
-        }
+        function formatDateForAPI(dateInput) { return dateInput.replace(/-/g, ''); }
 
+        /* ---- Import from Tally ---- */
         async function fetchData() {
             const btn = document.querySelector('.btn-primary');
             const originalText = btn.innerHTML;
@@ -228,28 +311,24 @@
 
             try {
                 const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
-                const toDate = formatDateForAPI(document.getElementById('toDate').value);
-                const limit = document.getElementById('limitInput').value || null;
+                const toDate   = formatDateForAPI(document.getElementById('toDate').value);
+                const limit    = document.getElementById('limitInput').value || null;
 
-                const res = await fetch('/api/journals/fetch', {
+                const res  = await fetch('/api/journals/fetch', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     body: JSON.stringify({ from_date: fromDate, to_date: toDate, limit: limit ? parseInt(limit) : null })
                 });
                 const data = await res.json();
-                
-                if (data.error) {
-                    alert('Error: ' + data.error);
-                    return;
-                }
+
+                if (data.error) { alert('Error: ' + data.error); return; }
 
                 allJournals = data.journals;
-                stats = data.stats;
+                stats       = data.stats;
                 localStorage.setItem('journalsData', JSON.stringify(data));
-                
-                updateKPIs(stats);
-                renderJournals(allJournals);
 
+                updateKPIs(stats);
+                applyFilters();   // re-apply any active month filter
             } catch (err) {
                 console.error(err);
                 alert('Connection Error');
@@ -259,8 +338,9 @@
             }
         }
 
+        /* ---- Sync ALL journals ---- */
         async function syncZoho() {
-            if (!confirm("This will sync the fetched Journal Entries to Zoho Books. Continue?")) return;
+            if (!confirm("This will sync ALL fetched Journal Entries to Zoho Books. Continue?")) return;
 
             const btn = document.querySelector('.btn-outline-primary');
             const originalText = btn.innerHTML;
@@ -269,48 +349,16 @@
 
             try {
                 const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
-                const toDate = formatDateForAPI(document.getElementById('toDate').value);
-                const limit = document.getElementById('limitInput').value || null;
+                const toDate   = formatDateForAPI(document.getElementById('toDate').value);
+                const limit    = document.getElementById('limitInput').value || null;
 
-                const res = await fetch('/api/journals/sync_zoho', { 
+                const res  = await fetch('/api/journals/sync_zoho', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ 
-                        journals: null, 
-                        from_date: fromDate, 
-                        to_date: toDate,
-                        limit: limit ? parseInt(limit) : null
-                    })
+                    body: JSON.stringify({ journals: null, from_date: fromDate, to_date: toDate, limit: limit ? parseInt(limit) : null })
                 });
                 const data = await res.json();
-                
-                if (data.status === 'success') {
-                    const total = data.stats.created + data.stats.failed;
-                    let msg = '✅ Zoho Sync Complete!\n\n';
-                    msg += `📊 Summary:\n`;
-                    msg += `  Total Journals: ${total}\n`;
-                    msg += `  ✅ Successfully Created: ${data.stats.created}\n`;
-                    msg += `  ❌ Failed: ${data.stats.failed}\n\n`;
-                    
-                    if (data.stats.created > 0) {
-                        msg += `${data.stats.created} Journal(s) have been created in Zoho Books!\n\n`;
-                    }
-                    
-                    // Show detailed error messages
-                    if (data.stats.failed > 0 && data.stats.errors && data.stats.errors.length > 0) {
-                        msg += `⚠️ Failed Journals:\n`;
-                        msg += `${'='.repeat(50)}\n`;
-                        data.stats.errors.forEach((err, idx) => {
-                            msg += `${idx + 1}. Journal: ${err.journal_number}\n`;
-                            msg += `   Date: ${err.date || 'N/A'}\n`;
-                            msg += `   Error: ${err.error}\n\n`;
-                        });
-                    }
-                    
-                    alert(msg);
-                } else {
-                    alert('❌ Sync Error: ' + data.message);
-                }
+                showSyncResult(data);
             } catch (err) {
                 console.error(err);
                 alert('Connection Error during Sync');
@@ -320,6 +368,7 @@
             }
         }
 
+        /* ---- Refresh cache ---- */
         async function refreshCache() {
             if (!confirm("This will refresh the ledger cache from Tally. Continue?")) return;
 
@@ -329,9 +378,8 @@
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Refreshing...';
 
             try {
-                const res = await fetch('/api/journals/refresh_cache', { method: 'POST' });
+                const res  = await fetch('/api/journals/refresh_cache', { method: 'POST' });
                 const data = await res.json();
-                
                 if (data.status === 'success') {
                     alert('✅ Cache Refreshed Successfully!\n\n' + data.message);
                 } else {
@@ -346,59 +394,231 @@
             }
         }
 
+        /* ---- KPIs ---- */
         function updateKPIs(stats) {
             if (!stats) return;
             document.getElementById('total-journals').innerText = stats.total_journals || 0;
-            document.getElementById('total-debit').innerText = '₹' + (stats.total_debit || 0).toLocaleString();
-            document.getElementById('total-credit').innerText = '₹' + (stats.total_credit || 0).toLocaleString();
+            document.getElementById('total-debit').innerText    = '₹' + (stats.total_debit  || 0).toLocaleString();
+            document.getElementById('total-credit').innerText   = '₹' + (stats.total_credit || 0).toLocaleString();
         }
 
+        /* ---- Render table ---- */
         function renderJournals(journals) {
-            const tbody = document.getElementById('tableBody');
+            currentFiltered = journals;
+            const tbody   = document.getElementById('tableBody');
+            const filtBtn = document.getElementById('insertFilteredBtn');
+            if (filtBtn) filtBtn.disabled = (journals.length === 0);
+
             if (!journals || journals.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No Journals Found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No Journals Found</td></tr>';
+                updateSelectionUI();
                 return;
             }
 
-            tbody.innerHTML = journals.map((j, idx) => {
-                // Calculate debit and credit totals for this journal
-                let debitTotal = 0;
-                let creditTotal = 0;
+            tbody.innerHTML = journals.map((j) => {
+                const realIdx = allJournals.indexOf(j);
+                let debitTotal = 0, creditTotal = 0;
                 j.line_items.forEach(item => {
-                    if (item.debit_or_credit === 'debit') {
-                        debitTotal += item.amount;
-                    } else {
-                        creditTotal += item.amount;
-                    }
+                    if (item.debit_or_credit === 'debit') debitTotal  += item.amount;
+                    else                                   creditTotal += item.amount;
                 });
 
                 return `
-                <tr style="cursor: pointer;" onclick="showJournalDetails(${idx})">
+                <tr style="cursor: pointer;" onclick="showJournalDetails(${realIdx})">
+                    <td onclick="event.stopPropagation()">
+                        <input type="checkbox" class="form-check-input jnl-chk" data-idx="${realIdx}" onchange="updateSelectionUI()">
+                    </td>
                     <td class="fw-medium text-primary">${j.journal_number}</td>
                     <td>${formatDate(j.date)}</td>
                     <td>${j.narration || '(No narration)'}</td>
                     <td class="text-end text-danger fw-bold">₹${debitTotal.toLocaleString()}</td>
                     <td class="text-end text-success fw-bold">₹${creditTotal.toLocaleString()}</td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showJournalDetails(${idx})">
+                        <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showJournalDetails(${realIdx})">
                             <i class="bi bi-eye"></i> View
                         </button>
                     </td>
-                </tr>
-            `}).join('');
+                </tr>`;
+            }).join('');
+            updateSelectionUI();
         }
 
+        /* ---- Selection helpers ---- */
+        function updateSelectionUI() {
+            const checked = document.querySelectorAll('.jnl-chk:checked');
+            const all     = document.querySelectorAll('.jnl-chk');
+            const count   = checked.length;
+            const bar     = document.getElementById('selectionBar');
+            const btn     = document.getElementById('insertSelectedBtn');
+            const allChk  = document.getElementById('selectAllChk');
+
+            bar.style.display = count > 0 ? 'flex' : 'none';
+            document.getElementById('selectedCount').innerText = count;
+            btn.disabled = count === 0;
+            btn.innerHTML = count > 0
+                ? `<i class="bi bi-check2-square me-2"></i> Insert ${count} Selected`
+                : '<i class="bi bi-check2-square me-2"></i> Insert Selected';
+
+            if (allChk) {
+                allChk.checked       = all.length > 0 && count === all.length;
+                allChk.indeterminate = count > 0 && count < all.length;
+            }
+        }
+
+        function selectAllVisible(checked) {
+            document.querySelectorAll('.jnl-chk').forEach(chk => chk.checked = checked);
+            const allChk = document.getElementById('selectAllChk');
+            if (allChk) allChk.checked = checked;
+            updateSelectionUI();
+        }
+
+        /* ---- Month filter helpers ---- */
+        function quickMonth(ym) {
+            activeMonth = (activeMonth === ym) ? '' : ym;
+            document.getElementById('monthFilter').value = activeMonth;
+            updatePillUI();
+            applyFilters();
+        }
+
+        function applyMonthFilter() {
+            activeMonth = document.getElementById('monthFilter').value;
+            updatePillUI();
+            applyFilters();
+        }
+
+        function clearMonthFilter() {
+            activeMonth = '';
+            document.getElementById('monthFilter').value = '';
+            updatePillUI();
+            applyFilters();
+        }
+
+        function updatePillUI() {
+            document.querySelectorAll('.month-pill').forEach(btn => {
+                const ym = btn.getAttribute('onclick').match(/'(\d+)'/)?.[1];
+                btn.classList.toggle('active', ym === activeMonth);
+            });
+            const badge = document.getElementById('activeMonthBadge');
+            if (activeMonth) {
+                badge.style.display = 'inline-block';
+                badge.textContent   = MONTH_NAMES[activeMonth] || activeMonth;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function applyFilters() {
+            const q = document.getElementById('searchInput').value.toLowerCase();
+            let filtered = allJournals;
+
+            // Month filter — j.date is YYYYMMDD
+            if (activeMonth) {
+                filtered = filtered.filter(j => j.date && j.date.startsWith(activeMonth));
+            }
+            // Text search (journal number, narration, ledger names)
+            if (q) {
+                filtered = filtered.filter(j =>
+                    j.journal_number.toLowerCase().includes(q) ||
+                    (j.narration && j.narration.toLowerCase().includes(q)) ||
+                    j.line_items.some(item => item.ledger_name.toLowerCase().includes(q))
+                );
+            }
+
+            const status = document.getElementById('filterStatus');
+            status.textContent = filtered.length !== allJournals.length
+                ? `Showing ${filtered.length} of ${allJournals.length} journals` : '';
+
+            renderJournals(filtered);
+        }
+
+        function handleSearch() { applyFilters(); }
+
+        /* ============================================================
+           INSERT SELECTED — only the ticked journals
+        ============================================================ */
+        async function insertSelected() {
+            const checked = document.querySelectorAll('.jnl-chk:checked');
+            if (checked.length === 0) { alert('Please select at least one journal first.'); return; }
+
+            const selectedJournals = Array.from(checked).map(chk => allJournals[parseInt(chk.dataset.idx)]);
+            if (!confirm(`Insert ${selectedJournals.length} selected journal(s) to Zoho Books?`)) return;
+
+            await _pushJournalsToZoho(selectedJournals, 'insertSelectedBtn');
+        }
+
+        /* ============================================================
+           INSERT FILTERED — all journals matching current month filter
+        ============================================================ */
+        async function insertFiltered() {
+            if (!currentFiltered || currentFiltered.length === 0) {
+                alert('No journals in the current filter to insert.'); return;
+            }
+            const label = activeMonth ? (MONTH_NAMES[activeMonth] || activeMonth) : 'current filter';
+            if (!confirm(`Insert ALL ${currentFiltered.length} journal(s) from "${label}" to Zoho Books?`)) return;
+
+            await _pushJournalsToZoho(currentFiltered, 'insertFilteredBtn');
+        }
+
+        /* ============================================================
+           SHARED helper — POST list to sync endpoint
+        ============================================================ */
+        async function _pushJournalsToZoho(journals, btnId) {
+            const btn = document.getElementById(btnId);
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Inserting...';
+
+            try {
+                const res  = await fetch('/api/journals/sync_zoho', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ journals: journals })
+                });
+                const data = await res.json();
+                showSyncResult(data);
+                selectAllVisible(false);
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error during Insert');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                updateSelectionUI();
+            }
+        }
+
+        /* ---- Shared result alert ---- */
+        function showSyncResult(data) {
+            if (data.status === 'success') {
+                const total = data.stats.created + data.stats.failed;
+                let msg = `✅ Complete!\n\n📊 Summary:\n`;
+                msg += `  Total Sent : ${total}\n`;
+                msg += `  ✅ Created  : ${data.stats.created}\n`;
+                msg += `  ❌ Failed   : ${data.stats.failed}\n\n`;
+                if (data.stats.failed > 0 && data.stats.errors?.length > 0) {
+                    msg += `⚠️ Failed Journals:\n${'='.repeat(50)}\n`;
+                    data.stats.errors.forEach((err, i) => {
+                        msg += `${i+1}. Journal : ${err.journal_number}\n`;
+                        msg += `   Date    : ${err.date || 'N/A'}\n`;
+                        msg += `   Error   : ${err.error}\n\n`;
+                    });
+                }
+                alert(msg);
+            } else {
+                alert('❌ Error: ' + data.message);
+            }
+        }
+
+        /* ---- Detail modal ---- */
         function showJournalDetails(idx) {
-            const j = allJournals[idx];
+            const j     = allJournals[idx];
             const modal = new bootstrap.Modal(document.getElementById('journalModal'));
-            
-            // Separate debit and credit entries
-            const debitEntries = j.line_items.filter(item => item.debit_or_credit === 'debit');
+
+            const debitEntries  = j.line_items.filter(item => item.debit_or_credit === 'debit');
             const creditEntries = j.line_items.filter(item => item.debit_or_credit === 'credit');
-            
-            let debitTotal = 0;
+            let debitTotal  = 0;
             let creditTotal = 0;
-            
+
             let html = `
                 <div class="row g-3">
                     <div class="col-md-12">
@@ -416,10 +636,7 @@
                     <table class="table table-sm table-bordered">
                         <thead class="table-light">
                             <tr>
-                                <th>Ledger Name</th>
-                                <th>Type</th>
-                                <th>Category</th>
-                                <th>Cost Centre</th>
+                                <th>Ledger Name</th><th>Type</th><th>Category</th><th>Cost Centre</th>
                                 <th class="text-end">Amount</th>
                             </tr>
                         </thead>
@@ -433,8 +650,8 @@
                                     <td>${item.tag_category || '-'}</td>
                                     <td>${item.tag_option || '-'}</td>
                                     <td class="text-end fw-bold text-danger">₹${item.amount.toLocaleString()}</td>
-                                </tr>
-                            `}).join('')}
+                                </tr>`;
+                            }).join('')}
                             <tr class="table-light">
                                 <td colspan="4" class="text-end fw-bold">Total Debit:</td>
                                 <td class="text-end fw-bold text-danger">₹${debitTotal.toLocaleString()}</td>
@@ -448,10 +665,7 @@
                     <table class="table table-sm table-bordered">
                         <thead class="table-light">
                             <tr>
-                                <th>Ledger Name</th>
-                                <th>Type</th>
-                                <th>Category</th>
-                                <th>Cost Centre</th>
+                                <th>Ledger Name</th><th>Type</th><th>Category</th><th>Cost Centre</th>
                                 <th class="text-end">Amount</th>
                             </tr>
                         </thead>
@@ -465,8 +679,8 @@
                                     <td>${item.tag_category || '-'}</td>
                                     <td>${item.tag_option || '-'}</td>
                                     <td class="text-end fw-bold text-success">₹${item.amount.toLocaleString()}</td>
-                                </tr>
-                            `}).join('')}
+                                </tr>`;
+                            }).join('')}
                             <tr class="table-light">
                                 <td colspan="4" class="text-end fw-bold">Total Credit:</td>
                                 <td class="text-end fw-bold text-success">₹${creditTotal.toLocaleString()}</td>
@@ -483,27 +697,24 @@
                                 <table class="table table-sm mb-0">
                                     <tr><th>Total Debit:</th><td class="text-end text-danger fw-bold">₹${debitTotal.toLocaleString()}</td></tr>
                                     <tr><th>Total Credit:</th><td class="text-end text-success fw-bold">₹${creditTotal.toLocaleString()}</td></tr>
-                                    <tr class="table-light"><th class="fs-5">Difference:</th><td class="text-end fs-5 fw-bold ${debitTotal === creditTotal ? 'text-success' : 'text-danger'}">₹${Math.abs(debitTotal - creditTotal).toLocaleString()}</td></tr>
+                                    <tr class="table-light">
+                                        <th class="fs-5">Difference:</th>
+                                        <td class="text-end fs-5 fw-bold ${debitTotal === creditTotal ? 'text-success' : 'text-danger'}">
+                                            ₹${Math.abs(debitTotal - creditTotal).toLocaleString()}
+                                        </td>
+                                    </tr>
                                 </table>
-                                ${debitTotal === creditTotal ? '<p class="text-success mb-0 text-center"><i class="bi bi-check-circle me-1"></i>Balanced Entry</p>' : '<p class="text-danger mb-0 text-center"><i class="bi bi-exclamation-triangle me-1"></i>Unbalanced Entry</p>'}
+                                ${debitTotal === creditTotal
+                                    ? '<p class="text-success mb-0 text-center"><i class="bi bi-check-circle me-1"></i>Balanced Entry</p>'
+                                    : '<p class="text-danger mb-0 text-center"><i class="bi bi-exclamation-triangle me-1"></i>Unbalanced Entry</p>'}
                             </div>
                         </div>
                     </div>
                 </div>
             `;
-            
+
             document.getElementById('journalDetails').innerHTML = html;
             modal.show();
-        }
-
-        function handleSearch() {
-            const q = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allJournals.filter(j => 
-                j.journal_number.toLowerCase().includes(q) ||
-                (j.narration && j.narration.toLowerCase().includes(q)) ||
-                j.line_items.some(item => item.ledger_name.toLowerCase().includes(q))
-            );
-            renderJournals(filtered);
         }
     </script>
 </body>

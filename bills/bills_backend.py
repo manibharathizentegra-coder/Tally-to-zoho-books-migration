@@ -1,5 +1,8 @@
 import os
+import sys
 import requests
+from datetime import datetime
+from pathlib import Path
 from bs4 import BeautifulSoup
 from collections import defaultdict
 from dotenv import load_dotenv
@@ -7,11 +10,20 @@ import json
 import re
 from fuzzywuzzy import fuzz
 
+# Add parent directory so we can import shared database_manager
+sys.path.append(str(Path(__file__).parent.parent))
+
+try:
+    import database_manager
+except ImportError:
+    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    database_manager = None
+
 # Load environment variables
 load_dotenv()
 
 TALLY_URL = "http://localhost:9000"
-BASE_URL = "https://www.zohoapis.in/books/v3"
+BASE_URL = "https://www.zohoapis.com/books/v3"
 CLIENT_ID = os.getenv("CLIENT_ID")
 CLIENT_SECRET = os.getenv("CLIENT_SECRET")
 REFRESH_TOKEN = os.getenv("REFRESH_TOKEN")
@@ -115,7 +127,7 @@ def get_access_token():
         "client_secret": CLIENT_SECRET,
         "grant_type": "refresh_token"
     }
-    res = requests.post("https://accounts.zoho.in/oauth/v2/token", data=payload)
+    res = requests.post("https://accounts.zoho.com/oauth/v2/token", data=payload)
     return res.json().get("access_token")
 
 def get_ledger_map_from_tally():
@@ -911,28 +923,88 @@ def create_zoho_bill(token, bill_data, contact_map, account_map, payment_terms_m
 
 def get_all_bills_data(from_date="20250401", to_date="20250430", limit=None):
     """
-    Wrapper function for API to get bill data
-    Returns formatted data for frontend display
+    Wrapper function for API to get bill data.
+    Fetches from Tally, saves ALL fields to SQLite DB, returns formatted data
+    for frontend display.  Mirrors get_all_receipts_data() pattern exactly.
     """
+    # Ensure DB tables exist
+    if database_manager:
+        database_manager.init_db()
+
     try:
         bills = fetch_tally_bills_range(from_date, to_date, limit)
-        
+
         if not bills:
             return None
-        
-        # Calculate stats
-        total_bills = len(bills)
+
+        # ----------------------------------------------------------------
+        # SAVE EVERY FIELD TO SQLITE
+        # Complex list fields — vendor_address, line_items, taxes —
+        # are JSON-serialised exactly like invoice_allocations in receipts.
+        # NOT A SINGLE FIELD IS SKIPPED.
+        # ----------------------------------------------------------------
+        if database_manager and bills:
+            now = datetime.now().isoformat()
+            db_data_list = []
+
+            for bill in bills:
+                db_data_list.append({
+                    # --- Voucher identity ---
+                    "bill_number": bill.get("bill_number", ""),
+                    "date":        bill.get("date", ""),
+                    "vendor_name": bill.get("vendor_name", ""),
+
+                    # --- Header fields ---
+                    "po_number":        bill.get("po_number", ""),
+                    "reference_number": bill.get("reference_number", ""),
+                    # vendor_address is a list — JSON stringify it
+                    "vendor_address":   json.dumps(bill.get("vendor_address", [])),
+                    "payment_terms":    bill.get("payment_terms", ""),
+                    "purchase_ledger":  bill.get("purchase_ledger", ""),
+                    "narration":        bill.get("narration", ""),
+
+                    # --- line_items: each element has
+                    #     item_name, quantity, rate, discount,
+                    #     amount, category, cost_centre
+                    "line_items": json.dumps(bill.get("line_items", [])),
+
+                    # --- taxes: each element has
+                    #     tax_name, tax_type, tax_rate, tax_amount
+                    "taxes": json.dumps(bill.get("taxes", [])),
+
+                    # --- Totals ---
+                    "rounding_off": bill.get("rounding_off", 0) or 0,
+                    "subtotal":     bill.get("subtotal",     0) or 0,
+                    "tax_total":    bill.get("tax_total",    0) or 0,
+                    "total_amount": bill.get("total_amount", 0) or 0,
+
+                    # --- Fetch range & timestamps ---
+                    "from_date":  from_date,
+                    "to_date":    to_date,
+                    "created_at": now,
+                    "updated_at": now,
+                })
+
+            # Bulk-save to prevent 'database is locked' errors
+            database_manager.bulk_save_bills(db_data_list)
+            print(f"💾 Saved {len(bills)} bills to database")
+
+        # ----------------------------------------------------------------
+        # Build return stats
+        # ----------------------------------------------------------------
+        total_bills  = len(bills)
         total_amount = sum(bill.get("total_amount", 0) for bill in bills)
-        
+
         return {
             "bills": bills,
             "stats": {
-                "total_bills": total_bills,
+                "total_bills":  total_bills,
                 "total_amount": round(total_amount, 2),
-                "from_date": from_date,
-                "to_date": to_date
+                "from_date":    from_date,
+                "to_date":      to_date
             }
         }
+
     except Exception as e:
         print(f"❌ Error in get_all_bills_data: {e}")
         import traceback
@@ -1139,46 +1211,75 @@ def fetch_tally_bills_range(from_date="20250401", to_date="20250430", limit=None
 
 def sync_bills_to_zoho(selected_bills=None, from_date="20250401", to_date="20250430", limit=None):
     """
-    Sync bills to Zoho Books
-    
-    Args:
-        selected_bills: List of bill objects to sync (if None, fetches from Tally)
-        from_date: Start date in YYYYMMDD format
-        to_date: End date in YYYYMMDD format
-        limit: Maximum number of bills to sync
+    Sync bills to Zoho Books.
+
+    Priority order for data source:
+      1. selected_bills    — passed directly from frontend (selected rows)
+      2. DB (tally_data.db)— read previously-fetched data, NO second Tally port call
+      3. Tally port         — fallback only if DB is also empty for the range
+
+    This means 'Sync All' re-uses data saved in the DB by
+    'Import Bills', avoiding a redundant Tally XML request.
     """
     try:
         print("🚀 Starting Zoho Sync (Bills)...")
-        
+
         # Get access token
         token = get_access_token()
         if not token:
             return {"status": "error", "message": "Failed to get access token"}
-        
-        # Get Zoho data
-        contact_map = get_zoho_contacts(token)
-        account_map = get_zoho_accounts(token)
-        payment_terms_map = get_zoho_payment_terms_list(token)
-        tax_map = get_zoho_taxes(token)
-        tag_map = get_zoho_tags(token)
-        
-        # Get bills to sync
-        if not selected_bills:
-            bills_to_sync = fetch_tally_bills_range(from_date, to_date, limit)
-        else:
+
+        # Get Zoho reference data
+        contact_map      = get_zoho_contacts(token)
+        account_map      = get_zoho_accounts(token)
+        payment_terms_map= get_zoho_payment_terms_list(token)
+        tax_map          = get_zoho_taxes(token)
+        tag_map          = get_zoho_tags(token)
+
+        # ----------------------------------------------------------------
+        # DETERMINE WHAT TO SYNC
+        # ----------------------------------------------------------------
+        if selected_bills:
+            # 1. Explicit selection from frontend — use as-is
             bills_to_sync = selected_bills
             if limit and len(bills_to_sync) > limit:
                 bills_to_sync = bills_to_sync[:limit]
-        
+            print(f"📊 Using {len(bills_to_sync)} selected bill(s) from frontend")
+
+        else:
+            # 2. Try DB first (avoids second Tally port call)
+            bills_to_sync = []
+            if database_manager:
+                db_rows = database_manager.get_bills_by_date_range(from_date, to_date)
+                if db_rows:
+                    # Parse JSON fields back to Python objects
+                    for row in db_rows:
+                        for field in ('vendor_address', 'line_items', 'taxes'):
+                            if row.get(field) and isinstance(row[field], str):
+                                try:
+                                    row[field] = json.loads(row[field])
+                                except Exception:
+                                    row[field] = []
+                    if limit:
+                        db_rows = db_rows[:limit]
+                    bills_to_sync = db_rows
+                    print(f"📊 Loaded {len(bills_to_sync)} bill(s) from DB (no Tally call needed)")
+
+            # 3. Fallback: hit Tally port if DB was empty
+            if not bills_to_sync:
+                print("🔄 DB empty for range — fetching from Tally port as fallback...")
+                bills_to_sync = fetch_tally_bills_range(from_date, to_date, limit)
+
         if not bills_to_sync:
             return {"status": "error", "message": "No bills to sync"}
-        
+
         print(f"📊 Syncing {len(bills_to_sync)} bill(s) to Zoho Books...")
-        
+
         stats = {"created": 0, "failed": 0, "errors": []}
-        
+
         for bill in bills_to_sync:
-            result = create_zoho_bill(token, bill, contact_map, account_map, payment_terms_map, tax_map, tag_map)
+            result = create_zoho_bill(token, bill, contact_map, account_map,
+                                      payment_terms_map, tax_map, tag_map)
             if result.get("success"):
                 stats["created"] += 1
                 print(f"✅ Synced Bill #{bill['bill_number']}")
@@ -1186,16 +1287,17 @@ def sync_bills_to_zoho(selected_bills=None, from_date="20250401", to_date="20250
                 stats["failed"] += 1
                 stats["errors"].append({
                     "bill_number": bill['bill_number'],
-                    "vendor": bill['vendor_name'],
-                    "error": result.get("error", "Unknown error")
+                    "vendor":      bill['vendor_name'],
+                    "error":       result.get("error", "Unknown error")
                 })
-                print(f"❌ Failed Bill #{bill['bill_number']}")
-        
+                print(f"❌ Failed Bill #{bill['bill_number']}: {result.get('error')}")
+
         return {"status": "success", "stats": stats}
-        
+
     except Exception as e:
         print(f"❌ Error in sync_bills_to_zoho: {e}")
         return {"status": "error", "message": str(e)}
+
 
 def main():
     """Main function to migrate bill #11 from Tally to Zoho Books"""

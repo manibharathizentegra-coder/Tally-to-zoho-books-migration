@@ -410,81 +410,126 @@ def sync_items_to_zoho(selected_items=None):
             return {"status": "error", "message": "Zoho Connector missing"}
 
     print("🚀 Starting Zoho Sync (Items)...")
-    
 
+    # ── Fetch items to sync ───────────────────────────────────────────────────
     if not selected_items:
         if database_manager:
             print("💾 Fetching items from SQLite Database...")
             items_to_sync = database_manager.get_all_items()
-            
             if not items_to_sync:
-                print("⚠️ No items found in DB. Trying Tally fetch...")
+                print("⚠️ No items in DB. Trying Tally fetch...")
                 data = get_all_items_data()
-                if data:
-                    items_to_sync = data["items"]
+                items_to_sync = data["items"] if data else []
         else:
             print("📡 Fetching items directly from Tally...")
             data = get_all_items_data()
-            if not data: return {"status": "error", "message": "No Tally Data"}
+            if not data:
+                return {"status": "error", "message": "No Tally Data"}
             items_to_sync = data["items"]
     else:
         items_to_sync = selected_items
 
-    stats = {"created": 0, "updated": 0, "failed": 0}
+    if not items_to_sync:
+        return {"status": "error", "message": "No items to sync"}
 
-    # Pre-fetch taxes to map percentage -> ID
+    total = len(items_to_sync)
+    print(f"📦 Total items to sync: {total}")
+
+    # ── Pre-fetch taxes: GST% → tax_id ───────────────────────────────────────
+    tax_map = {}
     taxes_resp = zoho.api_call("GET", "/settings/taxes")
-    tax_map = {} # Rate -> ID
     if taxes_resp.get("code") == 0:
         for t in taxes_resp.get("taxes", []):
-            tax_map[float(t.get("tax_percentage", 0))] = t.get("tax_id")
+            pct = float(t.get("tax_percentage", 0))
+            tax_map[pct] = t.get("tax_id")
+    print(f"📋 Loaded {len(tax_map)} tax rates from Zoho")
 
-    for i in items_to_sync:
-        name = i["name"]
-        rate = float(i.get("rate", 0) or 0)
-        hsn = i.get("hsn", "")
-        gst_percent = float(i.get("gst_rate", 0) or 0)
-        
-        # Find Tax ID
-        tax_id = tax_map.get(gst_percent, "") 
-        # If no exact match, maybe skip tax or just leave empty? Leave empty for safety.
+    # ── Bulk pre-load existing Zoho items (name → item_id map) ───────────────
+    print("📥 Pre-loading existing Zoho items...")
+    existing_items = {}
+    page = 1
+    while True:
+        res = zoho.api_call("GET", "/items", params={"page": page, "per_page": 200})
+        if res.get("code") != 0:
+            print(f"⚠️ Could not fetch items page {page}: {res.get('message')}")
+            break
+        page_items = res.get("items", [])
+        for item in page_items:
+            existing_items[item["name"].lower().strip()] = item["item_id"]
+        has_more = res.get("page_context", {}).get("has_more_page", False)
+        print(f"   📄 Page {page} — {len(page_items)} items (has_more={has_more})")
+        if not has_more:
+            break
+        page += 1
+    print(f"✅ Pre-loaded {len(existing_items)} existing Zoho items")
+
+    # ── Main sync loop ────────────────────────────────────────────────────────
+    stats        = {"created": 0, "updated": 0, "skipped": 0, "failed": 0}
+    failed_items = []
+
+    def clean(val):
+        return (val or "").replace("\r", "").replace("\n", "").strip()
+
+    for idx, i in enumerate(items_to_sync, 1):
+        name = clean(i.get("name", ""))
+        if not name:
+            continue
+
+        name_key   = name.lower().strip()
+        rate       = float(i.get("rate", 0) or 0)
+        hsn        = clean(i.get("hsn", ""))
+        unit       = clean(i.get("unit", ""))
+        desc       = clean(i.get("description", ""))
+        gst_pct    = float(i.get("gst_rate", 0) or 0)
+        tax_id     = tax_map.get(gst_pct, "")
+
+        # Map Tally supply_type → Zoho product_type
+        supply     = clean(i.get("supply_type", "")).lower()
+        product_type = "service" if "service" in supply else "goods"
+
+        # Progress log every 50
+        if idx % 50 == 0 or idx == 1 or idx == total:
+            print(f"   🔄 Progress: {idx}/{total} | created={stats['created']} updated={stats['updated']} skipped={stats['skipped']} failed={stats['failed']}")
 
         payload = {
-            "name": name,
-            "rate": rate,
-            "hsn_or_sac": hsn,
-            "tax_id": tax_id,
-            "product_type": "goods" # Default
+            "name":        name,
+            "rate":        rate,
+            "unit":        unit,          # unit of measure from Tally
+            "description": desc,          # HSN description
+            "hsn_or_sac":  hsn,           # HSN/SAC code
+            "tax_id":      tax_id,        # mapped from GST %
+            "product_type": product_type  # "goods" or "service"
         }
 
-        # Search
-        search = zoho.api_call("GET", "/items", params={"name": name})
-        
-        if search.get("code") == 0:
-            existing_items = search.get("items", [])
-            existing = next((item for item in existing_items if item["name"].lower() == name.lower()), None)
-            
-            if existing:
-                item_id = existing["item_id"]
-                res = zoho.api_call("PUT", f"/items/{item_id}", payload=payload)
-                if res.get("code") == 0:
-                    stats["updated"] += 1
-                    print(f"✅ Updated Item: {name}")
-                else:
-                    stats["failed"] += 1
-                    print(f"❌ Item Update Failed {name}: {res.get('message')}")
+        # ── Check existence locally (no extra GET per item) ───────────────────
+        if name_key in existing_items:
+            # UPDATE existing item
+            item_id = existing_items[name_key]
+            res = zoho.api_call("PUT", f"/items/{item_id}", payload=payload)
+            if res.get("code") == 0:
+                stats["updated"] += 1
+                print(f"🔄 Updated: {name}")
             else:
-                res = zoho.api_call("POST", "/items", payload=payload)
-                if res.get("code") == 0:
-                    stats["created"] += 1
-                    print(f"✨ Created Item: {name}")
-                else:
-                    stats["failed"] += 1
-                    print(f"❌ Item Create Failed {name}: {res.get('message')}")
+                stats["failed"] += 1
+                err = res.get("message", "Unknown error")
+                failed_items.append({"name": name, "reason": err})
+                print(f"❌ Update Failed {name}: {err}")
         else:
-            stats["failed"] += 1
+            # CREATE new item
+            res = zoho.api_call("POST", "/items", payload=payload)
+            if res.get("code") == 0:
+                stats["created"] += 1
+                existing_items[name_key] = res.get("item", {}).get("item_id", "")
+                print(f"✨ Created: {name}")
+            else:
+                stats["failed"] += 1
+                err = res.get("message", "Unknown error")
+                failed_items.append({"name": name, "reason": err})
+                print(f"❌ Create Failed {name}: {err}")
 
-    return {"status": "success", "stats": stats}
+    print(f"\n🏁 Items Sync Complete — Created: {stats['created']}, Updated: {stats['updated']}, Skipped: {stats['skipped']}, Failed: {stats['failed']}")
+    return {"status": "success", "stats": stats, "failed_items": failed_items}
+
 
 if __name__ == "__main__":
     pass

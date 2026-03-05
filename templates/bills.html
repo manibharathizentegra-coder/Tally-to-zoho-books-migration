@@ -14,7 +14,7 @@
         body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
         .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
         .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
-        
+
         .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
         .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
         .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
@@ -22,6 +22,13 @@
 
         .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
         .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
+
+        /* Month pill buttons */
+        .month-pill { border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 500;
+                      border: 1.5px solid #dee2e6; background: #fff; cursor: pointer; transition: all .15s; }
+        .month-pill:hover { background: #5e35b1; color: #fff; border-color: #5e35b1; }
+        .month-pill.active { background: #5e35b1; color: #fff; border-color: #5e35b1; box-shadow: 0 2px 6px rgba(94,53,177,.35); }
+        .month-filter-bar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 16px; background: #f8f9ff; border-top: 1px solid #eee; }
     </style>
 </head>
 <body>
@@ -65,13 +72,26 @@
                     </a>
                 </li>
                 <li class="nav-item me-3">
+                    <a class="nav-link" href="/payments_made">
+                        <i class="bi bi-cash-stack me-1"></i> Payments Made
+                    </a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
+                </li>
+                <li class="nav-item me-3">
                     <a class="nav-link" href="/sales_orders">
                         <i class="bi bi-cart-check me-1"></i> Sales Orders
                     </a>
                 </li>
-                <li class="nav-item">
+                <li class="nav-item me-3">
                     <a class="nav-link" href="/purchase_orders">
                         <i class="bi bi-bag-check me-1"></i> Purchase Orders
+                    </a>
+                </li>
+                <li class="nav-item">
+                    <a class="nav-link" href="/opening-balance">
+                        <i class="bi bi-bank me-1"></i> Opening Balance
                     </a>
                 </li>
             </ul>
@@ -86,9 +106,15 @@
                 <h4 class="fw-bold mb-1">Purchase Bills</h4>
                 <p class="text-muted small mb-0">View and sync purchase bills from Tally to Zoho Books</p>
             </div>
-            <div class="d-flex gap-2">
+            <div class="d-flex gap-2 flex-wrap">
+                <button onclick="insertSelected()" id="insertSelectedBtn" class="btn btn-success d-flex align-items-center" disabled>
+                    <i class="bi bi-check2-square me-2"></i> Insert Selected
+                </button>
+                <button onclick="insertFiltered()" id="insertFilteredBtn" class="btn btn-info text-white d-flex align-items-center" disabled>
+                    <i class="bi bi-calendar2-check me-2"></i> Insert Month Filter
+                </button>
                 <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
-                    <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+                    <i class="bi bi-arrow-repeat me-2"></i> Sync All to Zoho
                 </button>
                 <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
                     <i class="bi bi-cloud-download me-2"></i> Import Bills
@@ -97,25 +123,66 @@
         </div>
 
         <!-- DATE RANGE SELECTOR -->
-        <div class="content-card mb-4 p-3">
-            <div class="row g-3 align-items-end">
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">From Date</label>
-                    <input type="date" id="fromDate" class="form-control" value="2025-04-01">
+        <div class="content-card mb-4">
+            <div class="p-3">
+                <div class="row g-3 align-items-end">
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">From Date</label>
+                        <input type="date" id="fromDate" class="form-control" value="2025-04-01">
+                    </div>
+                    <div class="col-md-3">
+                        <label class="form-label small fw-bold">To Date</label>
+                        <input type="date" id="toDate" class="form-control" value="2025-04-30">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Limit (optional)</label>
+                        <input type="number" id="limitInput" class="form-control" placeholder="All">
+                    </div>
+                    <div class="col-md-2">
+                        <label class="form-label small fw-bold">Filter by Month</label>
+                        <select id="monthFilter" class="form-select" onchange="applyMonthFilter()">
+                            <option value="">All Months</option>
+                            <option value="202504">April 2025</option>
+                            <option value="202505">May 2025</option>
+                            <option value="202506">June 2025</option>
+                            <option value="202507">July 2025</option>
+                            <option value="202508">August 2025</option>
+                            <option value="202509">September 2025</option>
+                            <option value="202510">October 2025</option>
+                            <option value="202511">November 2025</option>
+                            <option value="202512">December 2025</option>
+                            <option value="202601">January 2026</option>
+                            <option value="202602">February 2026</option>
+                            <option value="202603">March 2026</option>
+                        </select>
+                    </div>
+                    <div class="col-md-2">
+                        <button onclick="fetchData()" class="btn btn-secondary w-100">
+                            <i class="bi bi-funnel me-2"></i> Apply Filter
+                        </button>
+                    </div>
                 </div>
-                <div class="col-md-3">
-                    <label class="form-label small fw-bold">To Date</label>
-                    <input type="date" id="toDate" class="form-control" value="2025-04-30">
-                </div>
-                <div class="col-md-2">
-                    <label class="form-label small fw-bold">Limit (optional)</label>
-                    <input type="number" id="limitInput" class="form-control" placeholder="All">
-                </div>
-                <div class="col-md-4">
-                    <button onclick="fetchData()" class="btn btn-secondary w-100">
-                        <i class="bi bi-funnel me-2"></i> Apply Filter
-                    </button>
-                </div>
+            </div>
+
+            <!-- QUICK MONTH PILLS -->
+            <div class="month-filter-bar">
+                <span class="text-muted small fw-bold me-1"><i class="bi bi-calendar3 me-1"></i>Quick:</span>
+                <button class="month-pill" onclick="quickMonth('202504')">Apr</button>
+                <button class="month-pill" onclick="quickMonth('202505')">May</button>
+                <button class="month-pill" onclick="quickMonth('202506')">Jun</button>
+                <button class="month-pill" onclick="quickMonth('202507')">Jul</button>
+                <button class="month-pill" onclick="quickMonth('202508')">Aug</button>
+                <button class="month-pill" onclick="quickMonth('202509')">Sep</button>
+                <button class="month-pill" onclick="quickMonth('202510')">Oct</button>
+                <button class="month-pill" onclick="quickMonth('202511')">Nov</button>
+                <button class="month-pill" onclick="quickMonth('202512')">Dec</button>
+                <button class="month-pill" onclick="quickMonth('202601')">Jan</button>
+                <button class="month-pill" onclick="quickMonth('202602')">Feb</button>
+                <button class="month-pill" onclick="quickMonth('202603')">Mar</button>
+                <button class="btn btn-sm btn-outline-secondary ms-2" onclick="clearMonthFilter()">
+                    <i class="bi bi-x-circle me-1"></i>Clear
+                </button>
+                <span id="activeMonthBadge" class="badge bg-primary ms-2" style="display:none;"></span>
             </div>
         </div>
 
@@ -135,19 +202,32 @@
             </div>
         </div>
 
+        <!-- SELECTION INFO BAR -->
+        <div id="selectionBar" class="alert alert-success d-flex align-items-center justify-content-between py-2 px-3 mb-3" style="display:none; border-radius:10px;">
+            <span><i class="bi bi-check2-square me-2"></i><strong id="selectedCount">0</strong> bill(s) selected</span>
+            <div class="d-flex gap-2">
+                <button class="btn btn-sm btn-outline-success" onclick="selectAllVisible(true)">Select All Visible</button>
+                <button class="btn btn-sm btn-outline-secondary" onclick="selectAllVisible(false)">Clear Selection</button>
+            </div>
+        </div>
+
         <!-- CONTENT -->
         <div class="content-card">
-            <div class="p-3 border-bottom bg-light d-flex justify-content-between">
+            <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
                 <div class="input-group" style="max-width: 300px;">
                     <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search bills..." onkeyup="handleSearch()">
+                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search bills..." onkeyup="applyFilters()">
                 </div>
+                <div id="filterStatus" class="text-muted small"></div>
             </div>
 
             <div class="table-responsive" style="max-height: 600px;">
                 <table class="table table-hover align-middle mb-0">
                     <thead class="sticky-top">
                         <tr>
+                            <th style="width:40px;">
+                                <input type="checkbox" id="selectAllChk" class="form-check-input" title="Select / Deselect All" onchange="selectAllVisible(this.checked)">
+                            </th>
                             <th>Bill #</th>
                             <th>Date</th>
                             <th>Vendor</th>
@@ -158,7 +238,7 @@
                     </thead>
                     <tbody id="tableBody">
                         <tr>
-                            <td colspan="6" class="text-center py-5 text-muted">
+                            <td colspan="7" class="text-center py-5 text-muted">
                                 <i class="bi bi-file-earmark-text fs-1 mb-2"></i><br>
                                 Click "Import Bills" to fetch data
                             </td>
@@ -190,15 +270,38 @@
         let allBills = [];
         let stats = {};
 
-        // Load data on startup
-        document.addEventListener('DOMContentLoaded', () => {
+        // Load data on startup — priority: localStorage → DB → empty
+        document.addEventListener('DOMContentLoaded', async () => {
             const cached = localStorage.getItem('billsData');
             if (cached) {
-                const data = JSON.parse(cached);
-                allBills = data.bills;
-                stats = data.stats;
-                updateKPIs(stats);
-                renderBills(allBills);
+                try {
+                    const data = JSON.parse(cached);
+                    allBills = data.bills || [];
+                    stats    = data.stats  || {};
+                    updateKPIs(stats);
+                    renderBills(allBills);
+                    return;
+                } catch(e) {
+                    localStorage.removeItem('billsData');
+                }
+            }
+
+            // localStorage empty — try the DB
+            try {
+                const res  = await fetch('/api/db/bills');
+                const data = await res.json();
+                if (data.bills && data.bills.length > 0) {
+                    allBills = data.bills;
+                    const totalAmount = allBills.reduce((s, b) => s + (b.total_amount || 0), 0);
+                    stats = {
+                        total_bills:  allBills.length,
+                        total_amount: totalAmount
+                    };
+                    updateKPIs(stats);
+                    renderBills(allBills);
+                }
+            } catch(e) {
+                console.warn('DB load failed, Tally import needed:', e);
             }
         });
 
@@ -317,27 +420,72 @@
             document.getElementById('total-amount').innerText = '₹' + (stats.total_amount || 0).toLocaleString();
         }
 
+        let currentFiltered = [];   // tracks what's visible after filters
+
         function renderBills(bills) {
+            currentFiltered = bills;  // keep reference for Insert Filtered
             const tbody = document.getElementById('tableBody');
+
+            // Enable/disable Insert Month Filter button
+            const filtBtn = document.getElementById('insertFilteredBtn');
+            if (filtBtn) filtBtn.disabled = (bills.length === 0);
+
             if (!bills || bills.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No Bills Found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="7" class="text-center py-4 text-muted">No Bills Found</td></tr>';
+                updateSelectionUI();
                 return;
             }
 
-            tbody.innerHTML = bills.map((bill, idx) => `
-                <tr style="cursor: pointer;" onclick="showBillDetails(${idx})">
+            tbody.innerHTML = bills.map((bill) => {
+                const realIdx = allBills.indexOf(bill);
+                return `
+                <tr style="cursor: pointer;" onclick="showBillDetails(${realIdx})">
+                    <td onclick="event.stopPropagation()">
+                        <input type="checkbox" class="form-check-input bill-chk" data-idx="${realIdx}"
+                            onchange="updateSelectionUI()">
+                    </td>
                     <td class="fw-medium text-primary">${bill.bill_number}</td>
                     <td>${formatDate(bill.date)}</td>
                     <td>${bill.vendor_name}</td>
                     <td><small>${bill.reference_number || '-'}</small></td>
                     <td class="text-end fw-bold text-danger">₹${bill.total_amount.toLocaleString()}</td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showBillDetails(${idx})">
+                        <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showBillDetails(${realIdx})">
                             <i class="bi bi-eye"></i> View
                         </button>
                     </td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
+            updateSelectionUI();
+        }
+
+        /* ---- Selection helpers ---- */
+        function updateSelectionUI() {
+            const checked = document.querySelectorAll('.bill-chk:checked');
+            const count   = checked.length;
+            const all     = document.querySelectorAll('.bill-chk');
+            const bar     = document.getElementById('selectionBar');
+            const btn     = document.getElementById('insertSelectedBtn');
+            const allChk  = document.getElementById('selectAllChk');
+
+            bar.style.display = count > 0 ? 'flex' : 'none';
+            document.getElementById('selectedCount').innerText = count;
+            btn.disabled = count === 0;
+            btn.innerHTML = count > 0
+                ? `<i class="bi bi-check2-square me-2"></i> Insert ${count} Selected`
+                : '<i class="bi bi-check2-square me-2"></i> Insert Selected';
+
+            if (allChk) {
+                allChk.checked       = all.length > 0 && count === all.length;
+                allChk.indeterminate = count > 0 && count < all.length;
+            }
+        }
+
+        function selectAllVisible(checked) {
+            document.querySelectorAll('.bill-chk').forEach(chk => chk.checked = checked);
+            const allChk = document.getElementById('selectAllChk');
+            if (allChk) allChk.checked = checked;
+            updateSelectionUI();
         }
 
         function showBillDetails(idx) {
@@ -456,14 +604,154 @@
             modal.show();
         }
 
-        function handleSearch() {
+        /* ---- Month filter helpers ---- */
+        let activeMonth = '';   // e.g. '202504'
+
+        const MONTH_NAMES = {
+            '202504':'April 2025','202505':'May 2025','202506':'June 2025',
+            '202507':'July 2025','202508':'August 2025','202509':'September 2025',
+            '202510':'October 2025','202511':'November 2025','202512':'December 2025',
+            '202601':'January 2026','202602':'February 2026','202603':'March 2026'
+        };
+
+        function quickMonth(ym) {
+            activeMonth = (activeMonth === ym) ? '' : ym;  // toggle
+            document.getElementById('monthFilter').value = activeMonth;
+            updatePillUI();
+            applyFilters();
+        }
+
+        function applyMonthFilter() {
+            activeMonth = document.getElementById('monthFilter').value;
+            updatePillUI();
+            applyFilters();
+        }
+
+        function clearMonthFilter() {
+            activeMonth = '';
+            document.getElementById('monthFilter').value = '';
+            updatePillUI();
+            applyFilters();
+        }
+
+        function updatePillUI() {
+            // Highlight active pill
+            document.querySelectorAll('.month-pill').forEach(btn => {
+                const ym = btn.getAttribute('onclick').match(/\'(\d+)\'/)?.[1];
+                btn.classList.toggle('active', ym === activeMonth);
+            });
+            // Badge
+            const badge = document.getElementById('activeMonthBadge');
+            if (activeMonth) {
+                badge.style.display = 'inline-block';
+                badge.textContent = MONTH_NAMES[activeMonth] || activeMonth;
+            } else {
+                badge.style.display = 'none';
+            }
+        }
+
+        function applyFilters() {
             const q = document.getElementById('searchInput').value.toLowerCase();
-            const filtered = allBills.filter(bill => 
-                bill.bill_number.toLowerCase().includes(q) ||
-                bill.vendor_name.toLowerCase().includes(q) ||
-                (bill.reference_number && bill.reference_number.toLowerCase().includes(q))
-            );
+
+            let filtered = allBills;
+
+            // Month filter — bill.date is YYYYMMDD string
+            if (activeMonth) {
+                filtered = filtered.filter(bill => bill.date && bill.date.startsWith(activeMonth));
+            }
+
+            // Text search
+            if (q) {
+                filtered = filtered.filter(bill =>
+                    bill.bill_number.toLowerCase().includes(q) ||
+                    bill.vendor_name.toLowerCase().includes(q) ||
+                    (bill.reference_number && bill.reference_number.toLowerCase().includes(q))
+                );
+            }
+
+            // Status line
+            const status = document.getElementById('filterStatus');
+            status.textContent = filtered.length !== allBills.length
+                ? `Showing ${filtered.length} of ${allBills.length} bills`
+                : '';
+
             renderBills(filtered);
+        }
+
+        function handleSearch() { applyFilters(); }
+
+        /* ============================================================
+           INSERT SELECTED — only the ticked bills
+        ============================================================ */
+        async function insertSelected() {
+            const checked = document.querySelectorAll('.bill-chk:checked');
+            if (checked.length === 0) { alert('Please select at least one bill first.'); return; }
+
+            const selectedBills = Array.from(checked).map(chk => allBills[parseInt(chk.dataset.idx)]);
+            if (!confirm(`Insert ${selectedBills.length} selected bill(s) to Zoho Books?`)) return;
+
+            await _pushBillsToZoho(selectedBills, 'insertSelectedBtn', 'Insert Selected');
+        }
+
+        /* ============================================================
+           INSERT FILTERED — all bills matching current month/search filter
+        ============================================================ */
+        async function insertFiltered() {
+            if (!currentFiltered || currentFiltered.length === 0) {
+                alert('No bills in the current filter to insert.'); return;
+            }
+            const label = activeMonth ? (MONTH_NAMES[activeMonth] || activeMonth) : 'current filter';
+            if (!confirm(`Insert ALL ${currentFiltered.length} bill(s) from "${label}" to Zoho Books?`)) return;
+
+            await _pushBillsToZoho(currentFiltered, 'insertFilteredBtn', 'Insert Month Filter');
+        }
+
+        /* ============================================================
+           SHARED helper — POST a list of bills to the sync endpoint
+        ============================================================ */
+        async function _pushBillsToZoho(bills, btnId, btnLabel) {
+            const btn = document.getElementById(btnId);
+            const originalHTML = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Inserting...';
+
+            try {
+                const res = await fetch('/api/bills/sync_zoho', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ bills: bills })
+                });
+                const data = await res.json();
+
+                if (data.status === 'success') {
+                    const total = data.stats.created + data.stats.failed;
+                    let msg = `\u2705 Insert Complete!\n\n`;
+                    msg += `\ud83d\udcca Summary:\n`;
+                    msg += `  Total Sent : ${total}\n`;
+                    msg += `  \u2705 Created   : ${data.stats.created}\n`;
+                    msg += `  \u274c Failed    : ${data.stats.failed}\n\n`;
+
+                    if (data.stats.failed > 0 && data.stats.errors && data.stats.errors.length > 0) {
+                        msg += `\u26a0\ufe0f Failed Bills:\n${'='.repeat(50)}\n`;
+                        data.stats.errors.forEach((err, i) => {
+                            msg += `${i+1}. Bill  : ${err.bill_number}\n`;
+                            msg += `   Vendor: ${err.vendor}\n`;
+                            msg += `   Error : ${err.error}\n\n`;
+                        });
+                    }
+                    alert(msg);
+                    selectAllVisible(false);
+                } else {
+                    alert('\u274c Insert Error: ' + data.message);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error during Insert');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = originalHTML;
+                updateSelectionUI();
+            }
         }
     </script>
 </body>

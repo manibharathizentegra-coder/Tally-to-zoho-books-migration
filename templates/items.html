@@ -113,13 +113,26 @@
             </a>
           </li>
           <li class="nav-item me-3">
+              <a class="nav-link" href="/payments_made">
+                  <i class="bi bi-cash-stack me-1"></i> Payments Made
+              </a>
+          </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
+                </li>
+          <li class="nav-item me-3">
             <a class="nav-link" href="/sales_orders">
               <i class="bi bi-cart-check me-1"></i> Sales Orders
             </a>
           </li>
-          <li class="nav-item">
+          <li class="nav-item me-3">
             <a class="nav-link" href="/purchase_orders">
               <i class="bi bi-bag-check me-1"></i> Purchase Orders
+            </a>
+          </li>
+          <li class="nav-item">
+            <a class="nav-link" href="/opening-balance">
+              <i class="bi bi-bank me-1"></i> Opening Balance
             </a>
           </li>
         </ul>
@@ -305,35 +318,103 @@
       }
 
       async function syncZoho() {
-        if (
-          !confirm("This will sync ALL fetched items to Zoho Books. Continue?")
-        )
+        if (!confirm("This will sync ALL fetched items to Zoho Books. Continue?"))
           return;
 
         const btn = document.querySelector(".btn-outline-primary");
         const originalText = btn.innerHTML;
         btn.disabled = true;
-        btn.innerHTML =
-          '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+
+        // Show spinner in result area
+        let resultDiv = document.getElementById('itemsSyncResult');
+        if (!resultDiv) {
+          resultDiv = document.createElement('div');
+          resultDiv.id = 'itemsSyncResult';
+          resultDiv.className = 'mt-3';
+          document.querySelector('.container-fluid').appendChild(resultDiv);
+        }
+        resultDiv.innerHTML = `
+          <div class="d-flex align-items-center gap-2 text-muted py-3">
+            <span class="spinner-border spinner-border-sm"></span>
+            <span>Syncing Items to Zoho Books... This may take several minutes.</span>
+          </div>`;
 
         try {
           const res = await fetch("/api/items/sync_zoho", {
             method: "POST",
             headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ items: null }), // Sync all current fetch
+            body: JSON.stringify({ items: null }),
           });
           const data = await res.json();
 
           if (data.status === "success") {
-            alert(
-              `Sync Complete!\nCreated: ${data.stats.created}\nUpdated: ${data.stats.updated}\nFailed: ${data.stats.failed}`,
-            );
+            const s = data.stats;
+            const failed = data.failed_items || [];
+
+            // ── Summary bar ──────────────────────────────────────────────
+            const alertClass = s.failed > 0 ? 'alert-warning' : 'alert-success';
+            let html = `
+              <div class="alert ${alertClass} border-0 shadow-sm mt-2">
+                <div class="fw-bold mb-2">${s.failed > 0 ? '⚠️' : '✅'} Items Sync Complete</div>
+                <div class="d-flex gap-4 flex-wrap">
+                  <span><strong class="text-success">${s.created}</strong> Created</span>
+                  <span><strong class="text-primary">${s.updated}</strong> Updated</span>
+                  <span><strong class="text-secondary">${s.skipped || 0}</strong> Skipped</span>
+                  <span><strong class="text-danger">${s.failed}</strong> Failed</span>
+                </div>
+              </div>`;
+
+            // ── Failed items panel (always visible) ──────────────────────
+            if (failed.length > 0) {
+              const rows = failed.map((f, i) => `
+                <tr>
+                  <td class="text-center text-muted small">${i + 1}</td>
+                  <td class="fw-medium text-danger">${f.name}</td>
+                  <td>
+                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                      ${f.reason}
+                    </span>
+                  </td>
+                </tr>`).join('');
+
+              html += `
+                <div class="card border-danger shadow-sm mt-2">
+                  <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
+                    <span>❌ Failed Items — ${failed.length} error(s)</span>
+                    <span class="badge bg-white text-danger small">Review &amp; fix in Tally or Zoho</span>
+                  </div>
+                  <div class="card-body p-0">
+                    <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                      <table class="table table-sm table-hover mb-0 align-middle">
+                        <thead class="table-light sticky-top">
+                          <tr>
+                            <th style="width:40px;">#</th>
+                            <th>Item Name</th>
+                            <th>Error Reason</th>
+                          </tr>
+                        </thead>
+                        <tbody>${rows}</tbody>
+                      </table>
+                    </div>
+                  </div>
+                  <div class="card-footer bg-light text-muted small">
+                    💡 Common fix: Check if this item already exists in Zoho with a different name, or if the HSN/rate is invalid.
+                  </div>
+                </div>`;
+            }
+
+            resultDiv.innerHTML = html;
+
           } else {
-            alert("Sync Error: " + data.message);
+            resultDiv.innerHTML = `
+              <div class="alert alert-danger mt-2">
+                <strong>❌ Sync Failed:</strong> ${data.message || 'Unknown error'}
+              </div>`;
           }
         } catch (err) {
           console.error(err);
-          alert("Connection Error during Sync");
+          resultDiv.innerHTML = `<div class="alert alert-danger mt-2">❌ Connection Error: ${err.message}</div>`;
         } finally {
           btn.disabled = false;
           btn.innerHTML = originalText;

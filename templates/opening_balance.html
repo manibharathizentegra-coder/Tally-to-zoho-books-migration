@@ -1,0 +1,398 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Opening Balance Converter - Zen Migration</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
+        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
+        .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
+
+        /* Upload zone */
+        .drop-zone {
+            border: 2.5px dashed #9e9e9e;
+            border-radius: 16px;
+            padding: 50px 30px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.22s;
+            background: #fafafa;
+        }
+        .drop-zone:hover, .drop-zone.dragover { background: #ede7f6; border-color: #5e35b1; }
+        .drop-zone.filled  { border-color: #43a047; background: #f1f8f1; border-style: solid; }
+        .drop-zone.filled .dz-icon { color: #43a047; }
+        .dz-icon { font-size: 52px; color: #9e9e9e; margin-bottom: 10px; display: block; transition: color 0.2s; }
+
+        /* Stats */
+        .stat-card { background:#fff; border-radius:12px; padding:16px 20px; box-shadow:0 1px 6px rgba(0,0,0,.07); text-align:center; }
+        .stat-val  { font-size:24px; font-weight:700; }
+        .stat-lbl  { font-size:11px; color:#777; text-transform:uppercase; letter-spacing:.5px; margin-top:2px; }
+
+        /* Preview table */
+        #previewSection { display:none; }
+        .tbl-preview thead th { background:#5e35b1; color:#fff; font-size:12px; position:sticky; top:0; }
+        .tbl-preview td       { font-size:12px; }
+        .row-debit  td { color: #1b5e20; }
+        .row-credit td { color: #b71c1c; }
+        .badge-debit  { background:#e8f5e9; color:#2e7d32; border:1px solid #c8e6c9; }
+        .badge-credit { background:#fce4ec; color:#c62828; border:1px solid #f8bbd0; }
+
+        /* Output format info */
+        .col-chip { display:inline-block; padding:4px 10px; border-radius:20px; font-size:11px; font-weight:600; margin:3px; }
+    </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
+    <a class="navbar-brand d-flex align-items-center" href="#">
+        <i class="bi bi-wallet2 text-primary fs-3 me-2"></i>
+        <span class="fw-bold text-primary">Zen Migration</span>
+    </a>
+    <div class="collapse navbar-collapse ms-4">
+        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
+            <li class="nav-item me-3"><a class="nav-link" href="/ledgers"><i class="bi bi-journal-text me-1"></i>Ledgers</a></li>
+            <li class="nav-item me-3"><a class="nav-link" href="/items"><i class="bi bi-box-seam me-1"></i>Items</a></li>
+            <li class="nav-item me-3"><a class="nav-link" href="/journals"><i class="bi bi-journal-bookmark me-1"></i>Journals</a></li>
+            <li class="nav-item me-3"><a class="nav-link" href="/invoices"><i class="bi bi-receipt me-1"></i>Invoices</a></li>
+            <li class="nav-item me-3"><a class="nav-link" href="/bills"><i class="bi bi-file-earmark-text me-1"></i>Bills</a></li>
+            <li class="nav-item me-3"><a class="nav-link" href="/receipts"><i class="bi bi-cash-coin me-1"></i>Payment Received</a></li>
+            <li class="nav-item me-3">
+                <a class="nav-link" href="/payments_made">
+                    <i class="bi bi-cash-stack me-1"></i> Payments Made
+                </a>
+            </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
+                </li>
+            <li class="nav-item me-3"><a class="nav-link" href="/sales_orders"><i class="bi bi-cart-check me-1"></i>Sales Orders</a></li>
+            <li class="nav-item me-3"><a class="nav-link" href="/purchase_orders"><i class="bi bi-bag-check me-1"></i>Purchase Orders</a></li>
+            <li class="nav-item"><a class="nav-link active" href="/opening-balance"><i class="bi bi-bank me-1"></i>Opening Balance</a></li>
+        </ul>
+    </div>
+</nav>
+
+<div class="container-fluid py-4 px-4">
+
+    <!-- HEADER -->
+    <div class="mb-4">
+        <h4 class="fw-bold mb-1"><i class="bi bi-bank me-2 text-primary"></i>Opening Balance Converter</h4>
+        <p class="text-muted small mb-0">
+            Upload your <strong>Tally Trial Balance export</strong> → Converts to <strong>Zoho Books import-ready Excel</strong>
+        </p>
+    </div>
+
+    <div class="row g-4">
+
+        <!-- ── LEFT PANEL: Upload + Options ── -->
+        <div class="col-lg-5">
+
+            <!-- Upload Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 border-bottom fw-bold">
+                    <i class="bi bi-upload me-2 text-warning"></i> Upload Tally Export File
+                </div>
+                <div class="card-body">
+                    <div class="drop-zone" id="dropZone" onclick="document.getElementById('tallyInput').click()">
+                        <i class="bi bi-file-earmark-spreadsheet dz-icon"></i>
+                        <div class="fw-bold text-primary">Drop Tally Trial Balance here</div>
+                        <div class="text-muted small mt-1 mb-3">or click to browse</div>
+                        <span class="badge bg-light text-dark border">.pdf</span>
+                        <span class="badge bg-light text-dark border">.xlsx</span>
+                        <span class="badge bg-light text-dark border">.xls</span>
+                        <span class="badge bg-light text-dark border">.csv</span>
+                        <span class="badge bg-light text-dark border">.json</span>
+                    </div>
+                    <input type="file" id="tallyInput" accept=".pdf,.xlsx,.xls,.csv,.json" style="display:none" onchange="setFile(this.files[0])">
+
+                    <div id="fileInfo" class="alert alert-success d-flex align-items-center gap-2 mt-3 mb-0" style="display:none !important">
+                        <i class="bi bi-file-check fs-5"></i>
+                        <div>
+                            <div class="fw-bold small" id="fileName"></div>
+                            <div class="text-muted" style="font-size:11px" id="fileSize"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Options Card -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 border-bottom fw-bold">
+                    <i class="bi bi-sliders me-2 text-primary"></i> Options
+                </div>
+                <div class="card-body">
+                    <label class="form-label small fw-medium">Migration Date <span class="text-muted fw-normal">(Tally closing date)</span></label>
+                    <input type="date" id="migrationDate" class="form-control mb-2">
+                    <div class="alert alert-info border-0 py-2 small mb-0">
+                        <i class="bi bi-info-circle me-1"></i>
+                        This is your <strong>last date in Tally</strong> — usually your financial year closing date 
+                        (e.g. <strong>31/03/2025</strong>). Zoho will use this as the "as of" date for all opening balances.
+                    </div>
+                </div>
+            </div>
+
+            <!-- Analyse Button -->
+            <button class="btn btn-primary w-100 btn-lg fw-bold" id="analyseBtn" onclick="analyseFile()" disabled>
+                <i class="bi bi-cpu me-2"></i> Analyse & Preview
+            </button>
+            <div id="errorBox" class="alert alert-danger mt-3" style="display:none"></div>
+        </div>
+
+        <!-- ── RIGHT PANEL: Info + Preview ── -->
+        <div class="col-lg-7">
+
+            <!-- Output format info -->
+            <div class="card border-0 shadow-sm mb-4">
+                <div class="card-header bg-white py-3 border-bottom fw-bold">
+                    <i class="bi bi-table me-2 text-success"></i> Output Format (Zoho Books)
+                </div>
+                <div class="card-body">
+                    <p class="text-muted small mb-3">The downloaded file will have exactly these columns — ready to import in Zoho:</p>
+                    <div>
+                        <span class="col-chip" style="background:#ede7f6;color:#5e35b1">Migration Date</span>
+                        <span class="col-chip" style="background:#e3f2fd;color:#1565c0">Account Name</span>
+                        <span class="col-chip" style="background:#e8f5e9;color:#2e7d32">Debit or Credit</span>
+                        <span class="col-chip" style="background:#fff8e1;color:#e65100">Currency Code</span>
+                        <span class="col-chip" style="background:#fce4ec;color:#c62828">Amount</span>
+                        <span class="col-chip" style="background:#f3e5f5;color:#6a1b9a">Exchange Rate</span>
+                        <span class="col-chip" style="background:#e0f2f1;color:#00695c">Contact Name</span>
+                    </div>
+                    <hr class="my-3">
+                    <div class="row g-2 text-center">
+                        <div class="col-6">
+                            <div class="p-2 bg-light rounded small">
+                                <strong>Dr balance in Tally</strong><br>
+                                <span class="text-success">→ "Debit" row in output</span>
+                            </div>
+                        </div>
+                        <div class="col-6">
+                            <div class="p-2 bg-light rounded small">
+                                <strong>Cr balance in Tally</strong><br>
+                                <span class="text-danger">→ "Credit" row in output</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Preview section (hidden until analysis) -->
+            <div id="previewSection">
+
+                <!-- Stats row -->
+                <div class="row g-3 mb-4">
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-val text-primary" id="statAccounts">0</div>
+                            <div class="stat-lbl">Accounts</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-val" style="color:#5e35b1" id="statZohoRows">0</div>
+                            <div class="stat-lbl">Output Rows</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-val text-success" id="statDebit">₹0</div>
+                            <div class="stat-lbl">Total Debit</div>
+                        </div>
+                    </div>
+                    <div class="col-6 col-md-3">
+                        <div class="stat-card">
+                            <div class="stat-val text-danger" id="statCredit">₹0</div>
+                            <div class="stat-lbl">Total Credit</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Column detection info -->
+                <div class="alert alert-info border-0 py-2 small mb-3" id="colDetected"></div>
+
+                <!-- Preview table -->
+                <div class="card border-0 shadow-sm mb-4">
+                    <div class="card-header bg-white py-3 border-bottom d-flex justify-content-between align-items-center">
+                        <span class="fw-bold"><i class="bi bi-eye me-2 text-primary"></i>Output Preview <span class="text-muted fw-normal small">(first 12 rows)</span></span>
+                        <span class="badge bg-primary-subtle text-primary border border-primary-subtle" id="previewBadge"></span>
+                    </div>
+                    <div class="card-body p-0">
+                        <div class="table-responsive" style="max-height:380px; overflow-y:auto;">
+                            <table class="table table-sm table-hover align-middle mb-0 tbl-preview">
+                                <thead>
+                                    <tr>
+                                        <th>#</th>
+                                        <th>Account Name</th>
+                                        <th>Debit / Credit</th>
+                                        <th>Currency</th>
+                                        <th class="text-end">Amount</th>
+                                        <th>Exch. Rate</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="previewBody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Download -->
+                <div class="text-center">
+                    <button class="btn btn-success btn-lg px-5 fw-bold shadow-sm" onclick="downloadFile()">
+                        <i class="bi bi-download me-2"></i> Download Zoho-Ready Excel
+                    </button>
+                    <div class="text-muted small mt-2">
+                        <i class="bi bi-info-circle me-1"></i>
+                        Import in Zoho: <strong>Settings → Opening Balances → Import</strong>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+    let selectedFile = null;
+
+    // Set default migration date to 31 March 2025 (Indian FY close)
+    document.getElementById('migrationDate').value = '2025-03-31';
+
+    // ── Drag & Drop ───────────────────────────────────────────────────────────
+    const dz = document.getElementById('dropZone');
+    dz.addEventListener('dragover',  e => { e.preventDefault(); dz.classList.add('dragover'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('dragover'));
+    dz.addEventListener('drop', e => {
+        e.preventDefault();
+        dz.classList.remove('dragover');
+        setFile(e.dataTransfer.files[0]);
+    });
+
+    function setFile(file) {
+        if (!file) return;
+        const ext = file.name.split('.').pop().toLowerCase();
+        if (!['pdf','xlsx','xls','csv', 'json'].includes(ext)) {
+            showError('Please upload a .pdf, .json, .xlsx, .xls or .csv file');
+            return;
+        }
+        selectedFile = file;
+        document.getElementById('fileName').textContent = file.name;
+        document.getElementById('fileSize').textContent = (file.size / 1024).toFixed(1) + ' KB';
+        const fi = document.getElementById('fileInfo');
+        fi.style.display = 'flex';
+        fi.style.setProperty('display', 'flex', 'important');
+        dz.classList.add('filled');
+        document.getElementById('analyseBtn').disabled = false;
+        document.getElementById('errorBox').style.display = 'none';
+        document.getElementById('previewSection').style.display = 'none';
+    }
+
+    // ── Analyse ───────────────────────────────────────────────────────────────
+    async function analyseFile() {
+        if (!selectedFile) return;
+
+        const btn = document.getElementById('analyseBtn');
+        const orig = btn.innerHTML;
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Analysing...';
+        document.getElementById('errorBox').style.display = 'none';
+        document.getElementById('previewSection').style.display = 'none';
+
+        try {
+            const fd = new FormData();
+            fd.append('tally_file', selectedFile);
+            fd.append('migration_date', formatDate(document.getElementById('migrationDate').value));
+
+            const res = await fetch('/api/opening-balance/convert?preview=1', { method:'POST', body:fd });
+            const data = await res.json();
+
+            if (!res.ok || data.error) { showError(data.error || 'Analysis failed'); return; }
+
+            renderPreview(data.summary);
+
+        } catch(err) {
+            showError('Connection Error: ' + err.message);
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = orig;
+        }
+    }
+
+    function formatDate(val) {
+        // Convert 2025-03-31 → 31/03/2025
+        if (!val) return '';
+        const [y, m, d] = val.split('-');
+        return `${d}/${m}/${y}`;
+    }
+
+    function fmtAmt(v) {
+        return '₹' + Number(v).toLocaleString('en-IN', { minimumFractionDigits:2, maximumFractionDigits:2 });
+    }
+
+    function renderPreview(s) {
+        document.getElementById('statAccounts').textContent = s.accounts_found;
+        document.getElementById('statZohoRows').textContent = s.zoho_rows;
+        document.getElementById('statDebit').textContent   = fmtAmt(s.total_debit);
+        document.getElementById('statCredit').textContent  = fmtAmt(s.total_credit);
+
+        // Column detection info
+        const cd = s.col_detected;
+        document.getElementById('colDetected').innerHTML =
+            `<i class="bi bi-cpu me-1"></i> <strong>Columns detected in Tally file:</strong> &nbsp;
+             Particulars → Col ${cd.particulars + 1} &nbsp;|&nbsp;
+             Debit → Col ${cd.debit + 1} &nbsp;|&nbsp;
+             Credit → Col ${cd.credit + 1}`;
+
+        // Balance check
+        const diff = Math.abs(s.total_debit - s.total_credit);
+
+        // Preview rows
+        const tbody = document.getElementById('previewBody');
+        tbody.innerHTML = (s.preview || []).map((r, i) => {
+            const isDr = r[1] === 'Debit';
+            return `<tr class="${isDr ? 'row-debit' : 'row-credit'}">
+                <td class="text-muted small">${i+1}</td>
+                <td class="fw-medium">${r[0]}</td>
+                <td><span class="badge ${isDr ? 'badge-debit' : 'badge-credit'}">${r[1]}</span></td>
+                <td>INR</td>
+                <td class="text-end fw-bold">${fmtAmt(r[2])}</td>
+                <td class="text-muted">1</td>
+            </tr>`;
+        }).join('');
+
+        document.getElementById('previewBadge').textContent = s.zoho_rows + ' rows total';
+        document.getElementById('previewSection').style.display = 'block';
+    }
+
+    // ── Download ──────────────────────────────────────────────────────────────
+    async function downloadFile() {
+        if (!selectedFile) return;
+
+        try {
+            const fd = new FormData();
+            fd.append('tally_file', selectedFile);
+            fd.append('migration_date', formatDate(document.getElementById('migrationDate').value));
+
+            const res = await fetch('/api/opening-balance/convert?preview=0', { method:'POST', body:fd });
+            if (!res.ok) { const e = await res.json(); showError(e.error||'Download failed'); return; }
+
+            const blob = await res.blob();
+            const url  = URL.createObjectURL(blob);
+            const a    = document.createElement('a');
+            a.href = url; a.download = 'zoho_opening_balance.xlsx'; a.click();
+            URL.revokeObjectURL(url);
+
+        } catch(err) { showError('Download Error: ' + err.message); }
+    }
+
+    function showError(msg) {
+        const b = document.getElementById('errorBox');
+        b.innerHTML = '<i class="bi bi-exclamation-triangle me-2"></i>' + msg;
+        b.style.display = 'block';
+    }
+</script>
+</body>
+</html>
