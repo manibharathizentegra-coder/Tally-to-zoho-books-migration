@@ -12,6 +12,12 @@ import threading
 UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+import field_mapping_manager
+try:
+    import openpyxl
+except ImportError:
+    openpyxl = None
+
 # Add modules directory to path
 sys.path.append(os.path.dirname(__file__))
 
@@ -1157,6 +1163,206 @@ def api_items_refresh_sync_map_from_zoho():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
+# ─────────────────────────────────────────────────────────────
+#  FIELD MAPPING  –  Items
+# ─────────────────────────────────────────────────────────────
+MODULE_DB_FIELDS = {
+    "items": [
+        "name", "group_name", "category", "unit",
+        "hsn_source", "hsn", "description",
+        "gst_applicable", "gst_rate_source", "gst_rate",
+        "taxability", "supply_type", "rate_of_duty",
+        "qty", "qty_unit", "rate", "rate_unit", "value"
+    ],
+    "bills": [
+        "voucher_number", "date", "vendor_name", "total_amount",
+        "tax_amount", "payment_status", "due_date", "reference_number", "narration"
+    ],
+    "invoices": [
+        "voucher_number", "date", "customer_name", "total_amount",
+        "tax_amount", "payment_status", "due_date", "reference_number", "narration"
+    ],
+    "journals": [
+        "voucher_number", "date", "narration", "debit_account",
+        "credit_account", "amount", "reference"
+    ],
+    "receipts": [
+        "voucher_number", "date", "party_name", "amount",
+        "payment_mode", "reference_number", "narration", "bank_account"
+    ],
+    "payments_made": [
+        "voucher_number", "date", "party_name", "amount",
+        "payment_mode", "reference_number", "narration", "bank_account"
+    ],
+    "sales_orders": [
+        "voucher_number", "date", "customer_name", "total_amount",
+        "reference_number", "status", "narration"
+    ],
+    "purchase_orders": [
+        "voucher_number", "date", "vendor_name", "total_amount",
+        "reference_number", "status", "narration"
+    ],
+    "contra": [
+        "voucher_number", "date", "from_account", "to_account",
+        "amount", "narration", "reference_number"
+    ],
+    "credit_note": [
+        "voucher_number", "date", "customer_name", "total_amount",
+        "reference_number", "narration"
+    ],
+    "debit_note": [
+        "voucher_number", "date", "vendor_name", "total_amount",
+        "reference_number", "narration"
+    ],
+    "opening_balance": [
+        "account_name", "group_name", "opening_balance",
+        "balance_type", "date"
+    ],
+}
+
+
+@app.route('/api/field-mapping/<module>/upload-zoho-fields', methods=['POST'])
+def api_upload_zoho_fields(module):
+    """Upload a Zoho Books XLSX sample file; extract column headers as Zoho field names."""
+    if openpyxl is None:
+        return jsonify({"error": "openpyxl not installed. Run: pip install openpyxl"}), 500
+    file = request.files.get('file')
+    if not file:
+        return jsonify({"error": "No file uploaded"}), 400
+    filename = (file.filename or "").lower()
+    try:
+        raw = file.read()
+        headers = []
+
+        if filename.endswith('.csv'):
+            import csv as _csv
+            # Try UTF-8-BOM first (Excel default), fall back to latin-1
+            for enc in ('utf-8-sig', 'utf-8', 'latin-1'):
+                try:
+                    text = raw.decode(enc)
+                    break
+                except UnicodeDecodeError:
+                    pass
+            reader = _csv.reader(io.StringIO(text))
+            first_row = next(reader, [])
+            headers = [h.strip() for h in first_row if h.strip()]
+        else:
+            # Default: treat as XLSX
+            if openpyxl is None:
+                return jsonify({"error": "openpyxl not installed. Run: pip install openpyxl"}), 500
+            wb = openpyxl.load_workbook(io.BytesIO(raw), read_only=True, data_only=True)
+            ws = wb.active
+            for cell in next(ws.iter_rows(max_row=1)):
+                val = str(cell.value).strip() if cell.value is not None else ""
+                if val:
+                    headers.append(val)
+
+        if not headers:
+            return jsonify({"error": "No column headers found in the uploaded file"}), 400
+        field_mapping_manager.save_zoho_fields(module, headers)
+        return jsonify({"status": "ok", "zoho_fields": headers, "count": len(headers)})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/field-mapping/<module>/zoho-fields', methods=['GET'])
+def api_get_zoho_fields(module):
+    """Return saved Zoho field names for a module."""
+    data = field_mapping_manager.load(module)
+    return jsonify({
+        "zoho_fields": data.get("zoho_fields", []),
+        "has_fields": bool(data.get("zoho_fields")),
+    })
+
+
+@app.route('/api/field-mapping/<module>/db-fields', methods=['GET'])
+def api_get_db_fields(module):
+    """Return our local DB field names for a module."""
+    fields = MODULE_DB_FIELDS.get(module, [])
+    return jsonify({"db_fields": fields})
+
+
+@app.route('/api/field-mapping/<module>/mapping', methods=['GET'])
+def api_get_mapping(module):
+    """Return saved mapping for a module."""
+    data = field_mapping_manager.load(module)
+    return jsonify({
+        "mapping": data.get("mapping", {}),
+        "zoho_fields": data.get("zoho_fields", []),
+    })
+
+
+@app.route('/api/field-mapping/<module>/mapping', methods=['POST'])
+def api_save_mapping(module):
+    """Save DB→Zoho field mapping."""
+    body = request.get_json(force=True) or {}
+    mapping = body.get("mapping", {})
+    if not mapping:
+        return jsonify({"error": "mapping object is required"}), 400
+    field_mapping_manager.save_mapping(module, mapping)
+    return jsonify({"status": "ok", "saved": len(mapping)})
+
+
+@app.route('/api/field-mapping/<module>/export', methods=['GET'])
+def api_export_mapped(module):
+    """Export DB records as an XLSX formatted with Zoho Books column headers based on saved mapping."""
+    if openpyxl is None:
+        return jsonify({"error": "openpyxl not installed"}), 500
+    data = field_mapping_manager.load(module)
+    mapping = data.get("mapping", {})   # {zoho_field: db_field}
+    if not mapping:
+        return jsonify({"error": "No field mapping saved yet. Please map fields first."}), 400
+    # Fetch records based on module
+    records = []
+    try:
+        if module == "items" and database_manager:
+            records = database_manager.get_all_items()
+        elif module == "bills" and database_manager:
+            records = database_manager.get_all_vouchers("purchase")
+        elif module == "invoices" and database_manager:
+            records = database_manager.get_all_vouchers("sales")
+        elif module == "journals" and database_manager:
+            records = database_manager.get_all_vouchers("journal")
+        elif module == "receipts" and database_manager:
+            records = database_manager.get_all_vouchers("receipt")
+        elif module == "payments_made" and database_manager:
+            records = database_manager.get_all_vouchers("payment")
+        elif module == "sales_orders" and database_manager:
+            records = database_manager.get_all_vouchers("sales order")
+        elif module == "purchase_orders" and database_manager:
+            records = database_manager.get_all_vouchers("purchase order")
+        elif module == "contra" and database_manager:
+            records = database_manager.get_all_vouchers("contra")
+        elif module == "credit_note" and database_manager:
+            records = database_manager.get_all_vouchers("credit note")
+        elif module == "debit_note" and database_manager:
+            records = database_manager.get_all_vouchers("debit note")
+    except Exception as e:
+        records = []
+
+    wb = openpyxl.Workbook()
+    ws = wb.active
+    ws.title = module.replace("_", " ").title()
+
+    # zoho_fields order as columns
+    zoho_fields = list(mapping.keys())
+    ws.append(zoho_fields)   # header row
+
+    for rec in records:
+        row = []
+        if isinstance(rec, dict):
+            for zf in zoho_fields:
+                db_col = mapping.get(zf, "")
+                row.append(rec.get(db_col, ""))
+        ws.append(row)
+
+    buf = io.BytesIO()
+    wb.save(buf)
+    buf.seek(0)
+    filename = f"{module}_zoho_import.xlsx"
+    return send_file(buf, as_attachment=True, download_name=filename,
+                     mimetype='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
 
 
 # Journal routes
