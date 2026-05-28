@@ -1,0 +1,145 @@
+{# Zoho-style "Organization" switcher (maps to active Company DB) #}
+<div class="d-flex align-items-center gap-2">
+  <button class="btn btn-outline-secondary btn-sm d-flex align-items-center gap-2"
+          type="button"
+          data-bs-toggle="offcanvas"
+          data-bs-target="#orgSwitchCanvas"
+          aria-controls="orgSwitchCanvas"
+          title="Switch active Company DB">
+    <i class="bi bi-building"></i>
+    <span id="orgSwitchActiveDb" class="text-truncate" style="max-width: 180px;">Company DB</span>
+    <i class="bi bi-chevron-down small"></i>
+  </button>
+</div>
+
+<div class="offcanvas offcanvas-end" tabindex="-1" id="orgSwitchCanvas" aria-labelledby="orgSwitchCanvasLabel">
+  <div class="offcanvas-header">
+    <h5 class="offcanvas-title" id="orgSwitchCanvasLabel">Organizations</h5>
+    <button type="button" class="btn-close" data-bs-dismiss="offcanvas" aria-label="Close"></button>
+  </div>
+  <div class="offcanvas-body">
+    <div class="input-group mb-3">
+      <span class="input-group-text"><i class="bi bi-search"></i></span>
+      <input id="orgSwitchSearch" class="form-control" placeholder="Search" />
+    </div>
+
+    <div class="small text-muted mb-2">My Organizations</div>
+    <div id="orgSwitchList" class="list-group"></div>
+
+    <hr class="my-4">
+    <div class="fw-semibold mb-2">Create New Company DB</div>
+    <div class="input-group">
+      <span class="input-group-text"><i class="bi bi-plus-circle"></i></span>
+      <input id="orgSwitchNewDbName" class="form-control" placeholder="company_name.db" />
+      <button id="orgSwitchCreateBtn" class="btn btn-primary" type="button">Create</button>
+    </div>
+    <div class="form-text">Creates the DB and switches it as active.</div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    if (window.__orgSwitchInit) return;
+    window.__orgSwitchInit = true;
+
+    const activeEl = document.getElementById('orgSwitchActiveDb');
+    const listEl = document.getElementById('orgSwitchList');
+    const searchEl = document.getElementById('orgSwitchSearch');
+    const newDbEl = document.getElementById('orgSwitchNewDbName');
+    const createBtn = document.getElementById('orgSwitchCreateBtn');
+
+    let allCompanies = [];
+    let activeDb = '';
+
+    function norm(s) { return String(s || '').toLowerCase(); }
+
+    function render() {
+      if (!listEl) return;
+      const q = norm(searchEl ? searchEl.value : '');
+      const filtered = allCompanies.filter(c => !q || norm(c).includes(q));
+
+      listEl.innerHTML = filtered.map(db => {
+        const isActive = db === activeDb;
+        return `
+          <button type="button"
+                  class="list-group-item list-group-item-action d-flex align-items-center justify-content-between"
+                  data-db="${db}">
+            <div class="d-flex align-items-center gap-2">
+              <div class="rounded-3 border bg-light d-inline-flex align-items-center justify-content-center"
+                   style="width:34px;height:34px;">
+                <i class="bi bi-building text-secondary"></i>
+              </div>
+              <div class="text-start">
+                <div class="fw-semibold">${db}</div>
+                <div class="small text-muted">Company DB</div>
+              </div>
+            </div>
+            ${isActive ? '<i class="bi bi-check-circle-fill text-primary"></i>' : '<span></span>'}
+          </button>
+        `;
+      }).join('');
+    }
+
+    async function loadCompanies() {
+      try {
+        const res = await fetch('/api/db/companies');
+        const data = await res.json();
+        allCompanies = data.companies || [];
+        activeDb = data.active_db || '';
+        if (activeEl) activeEl.textContent = activeDb || 'Company DB';
+        render();
+      } catch (e) {
+        // silent
+      }
+    }
+
+    async function setActive(db) {
+      try {
+        const res = await fetch('/api/db/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ db_name: db })
+        });
+        const data = await res.json();
+        if (!res.ok || data.status !== 'ok') throw new Error(data.error || 'Failed');
+        activeDb = data.active_db || db;
+        if (activeEl) activeEl.textContent = activeDb;
+        render();
+        // Reload current page so module reloads from the new active DB.
+        window.location.reload();
+      } catch (e) {
+        alert('Failed to switch Company DB: ' + (e?.message || e));
+      }
+    }
+
+    async function createDb() {
+      const name = (newDbEl ? newDbEl.value : '').trim();
+      if (!name) { alert('Enter a new Company DB name'); return; }
+      if (createBtn) createBtn.disabled = true;
+      try {
+        await setActive(name);
+      } finally {
+        if (createBtn) createBtn.disabled = false;
+      }
+    }
+
+    if (searchEl) {
+      searchEl.addEventListener('input', render);
+    }
+    if (listEl) {
+      listEl.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('[data-db]');
+        if (!btn) return;
+        const db = btn.getAttribute('data-db');
+        if (!db || db === activeDb) return;
+        setActive(db);
+      });
+    }
+    if (createBtn) {
+      createBtn.addEventListener('click', createDb);
+    }
+
+    // Load when the offcanvas opens, but also set active label immediately.
+    loadCompanies();
+  })();
+</script>

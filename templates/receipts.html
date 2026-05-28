@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,100 +8,56 @@
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     
-    <style>
-        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
-        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
-        
-        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
-        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
-        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-
-        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
-        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
-        
-        .payment-mode-badge {
-            padding: 4px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: 500;
-        }
-        .mode-cash { background: #e8f5e9; color: #2e7d32; }
-        .mode-bank { background: #e3f2fd; color: #1565c0; }
-        .mode-other { background: #fff3e0; color: #e65100; }
-    </style>
+    {% include '_sidebar_styles.html' %}
+    {% include '_zb_theme.html' %}
 </head>
 <body>
+    {% set active_page = 'receipts' %}
+    <div class="app-shell">
+        {% include '_sidebar.html' %}
+        <main class="main">
+            {% set page_title = 'Payment Received' %}
+            {% set page_subtitle = 'Import receipts (payment received) and sync to Zoho.' %}
+            {% set topbar_actions = '
+              <button onclick="syncZoho()" class="btn btn-outline-primary btn-sm d-flex align-items-center">
+                <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+              </button>
+              <button id="receiptsStopBtn" onclick="stopReceiptsJob()" class="btn btn-outline-danger btn-sm d-flex align-items-center" disabled>
+                <i class="bi bi-stop-circle me-2"></i> Stop
+              </button>
+              <button onclick="fetchData()" class="btn btn-primary btn-sm d-flex align-items-center">
+                <i class="bi bi-cloud-download me-2"></i> Import Receipts
+              </button>
+            ' %}
+            {% include '_topbar.html' %}
 
-    <!-- NAVBAR -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
-        <a class="navbar-brand d-flex align-items-center" href="#">
-            <i class="bi bi-wallet2 text-primary fs-3 me-2"></i>
-            <span class="fw-bold text-primary">TallySoft</span>
-        </a>
-        <div class="collapse navbar-collapse ms-4">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/ledgers">
-                        <i class="bi bi-journal-text me-1"></i> Ledgers
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/items">
-                        <i class="bi bi-box-seam me-1"></i> Items
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/journals">
-                        <i class="bi bi-journal-bookmark me-1"></i> Journals
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/invoices">
-                        <i class="bi bi-receipt me-1"></i> Invoices
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/bills">
-                        <i class="bi bi-file-earmark-text me-1"></i> Bills
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link active" href="/receipts">
-                        <i class="bi bi-cash-coin me-1"></i> Payment Received
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/payments_made">
-                        <i class="bi bi-cash-stack me-1"></i> Payments Made
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/sales_orders">
-                        <i class="bi bi-cart-check me-1"></i> Sales Orders
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/purchase_orders">
-                        <i class="bi bi-bag-check me-1"></i> Purchase Orders
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/opening-balance">
-                        <i class="bi bi-bank me-1"></i> Opening Balance
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </nav>
+            {% set steps_title = 'Payment Received: Recommended Steps' %}
+            {% set steps = [
+              'Confirm Customers + Ledgers are synced to Zoho.',
+              'Import receipts XML into the active DB.',
+              'Review payment mode/account mapping.',
+              'Sync to Zoho and download failures for manual correction.'
+            ] %}
+            {% include '_steps_card.html' %}
 
-    <div class="container-fluid py-4 px-4">
+
+
+            <!-- LIVE CONSOLE -->
+            <div id="receiptsConsoleCard" class="content-card p-3 mb-4" style="display:none;">
+              <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+                <div class="fw-semibold"><i class="bi bi-terminal me-2"></i>Console</div>
+                <div class="small text-muted" id="receiptsConsoleStatus">Idle</div>
+              </div>
+              <pre id="receiptsConsole" class="mb-0 p-3 rounded-3 bg-dark text-light small" style="max-height: 260px; overflow:auto; white-space: pre-wrap;"></pre>
+              <div class="d-flex justify-content-end mt-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearReceiptsConsole()">
+                  <i class="bi bi-trash3 me-1"></i> Clear
+                </button>
+              </div>
+            </div>
+
+    <div class="container-fluid p-0">
         
         <!-- HEADER & ACTIONS -->
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -113,7 +69,12 @@
                 <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
                     <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
                 </button>
-                <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
+                
+                <input type="file" id="jsonUpload" accept=".json" style="display: none;" onchange="uploadJson(event)">
+                <button onclick="document.getElementById('jsonUpload').click()" class="btn btn-outline-success d-flex align-items-center">
+                    <i class="bi bi-upload me-2"></i> Upload JSON
+                </button>
+<button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
                     <i class="bi bi-cloud-download me-2"></i> Import Receipts
                 </button>
             </div>
@@ -153,7 +114,7 @@
             <div class="col-md-6">
                 <div class="kpi-card" style="border-color: #43a047;">
                     <div class="kpi-label">Total Amount Received</div>
-                    <div class="kpi-value text-success" id="total-amount">₹0</div>
+                    <div class="kpi-value text-success" id="total-amount">0</div>
                 </div>
             </div>
         </div>
@@ -208,6 +169,10 @@
     </div>
 
     <!-- SCRIPTS -->
+        </div>
+      </main>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let allReceipts = [];
@@ -225,12 +190,12 @@
                         totalAmount = data.total_amount;
                         updateKPIs();
                         renderReceipts(allReceipts);
-                        console.log('✅ Loaded receipts from database');
+                        console.log(' Loaded receipts from database');
                         return;
                     }
                 }
             } catch (err) {
-                console.log('⚠️ Could not load from database, trying localStorage...');
+                console.log(' Could not load from database, trying localStorage...');
             }
             
             // Fallback to localStorage
@@ -241,7 +206,7 @@
                 totalAmount = data.total_amount;
                 updateKPIs();
                 renderReceipts(allReceipts);
-                console.log('✅ Loaded receipts from localStorage');
+                console.log(' Loaded receipts from localStorage');
             }
         });
 
@@ -278,7 +243,7 @@
                 }
 
                 // Data was saved to database, now reload from database to verify
-                console.log('✅ Import complete, reloading from database...');
+                console.log(' Import complete, reloading from database...');
                 
                 // Small delay to ensure database write completes
                 await new Promise(resolve => setTimeout(resolve, 500));
@@ -291,20 +256,20 @@
                         allReceipts = dbData.receipts;
                         totalAmount = dbData.total_amount;
                         localStorage.setItem('receiptsData', JSON.stringify(dbData));
-                        console.log('✅ Loaded fresh data from database after import');
+                        console.log(' Loaded fresh data from database after import');
                     } else {
                         // Fallback to Tally data if DB fetch fails
                         allReceipts = data.receipts;
                         totalAmount = data.total_amount;
                         localStorage.setItem('receiptsData', JSON.stringify(data));
-                        console.log('⚠️ Using Tally data (DB fetch failed)');
+                        console.log(' Using Tally data (DB fetch failed)');
                     }
                 } catch (dbErr) {
                     // Fallback to Tally data if DB fetch fails
                     allReceipts = data.receipts;
                     totalAmount = data.total_amount;
                     localStorage.setItem('receiptsData', JSON.stringify(data));
-                    console.log('⚠️ Using Tally data (DB error):', dbErr);
+                    console.log(' Using Tally data (DB error):', dbErr);
                 }
                 
                 updateKPIs();
@@ -345,11 +310,11 @@
                 const data = await res.json();
                 
                 if (data.status === 'success') {
-                    let msg = '✅ Zoho Sync Complete!\n\n';
-                    msg += `📊 Summary:\n`;
+                    let msg = ' Zoho Sync Complete!\n\n';
+                    msg += ` Summary:\n`;
                     msg += `  Total Receipts: ${data.total}\n`;
-                    msg += `  ✅ Successfully Created: ${data.success}\n`;
-                    msg += `  ❌ Failed: ${data.failed}\n\n`;
+                    msg += `   Successfully Created: ${data.success}\n`;
+                    msg += `   Failed: ${data.failed}\n\n`;
                     
                     if (data.success > 0) {
                         msg += `${data.success} payment(s) have been created in Zoho Books!\n\n`;
@@ -357,7 +322,7 @@
                     
                     // Show detailed error messages
                     if (data.failed > 0 && data.errors && data.errors.length > 0) {
-                        msg += `⚠️ Failed Receipts:\n`;
+                        msg += ` Failed Receipts:\n`;
                         msg += `${'='.repeat(50)}\n`;
                         data.errors.forEach((err, idx) => {
                             msg += `${idx + 1}. Receipt: ${err.receipt_number}\n`;
@@ -368,7 +333,7 @@
                     
                     alert(msg);
                 } else {
-                    alert('❌ Sync Error: ' + data.message);
+                    alert(' Sync Error: ' + data.message);
                 }
             } catch (err) {
                 console.error(err);
@@ -381,7 +346,7 @@
 
         function updateKPIs() {
             document.getElementById('total-receipts').innerText = allReceipts.length || 0;
-            document.getElementById('total-amount').innerText = '₹' + (totalAmount || 0).toLocaleString();
+            document.getElementById('total-amount').innerText = '' + (totalAmount || 0).toLocaleString();
         }
 
         function getPaymentModeBadge(mode) {
@@ -389,9 +354,9 @@
             
             const modeLower = mode.toLowerCase();
             if (modeLower.includes('cash')) {
-                return '<span class="payment-mode-badge mode-cash">💵 Cash</span>';
+                return '<span class="payment-mode-badge mode-cash"> Cash</span>';
             } else if (modeLower.includes('bank')) {
-                return '<span class="payment-mode-badge mode-bank">🏦 Bank</span>';
+                return '<span class="payment-mode-badge mode-bank"> Bank</span>';
             } else {
                 return `<span class="payment-mode-badge mode-other">${mode}</span>`;
             }
@@ -410,7 +375,7 @@
                     <td>${formatDate(receipt.date)}</td>
                     <td>${receipt.customer_name}</td>
                     <td>${getPaymentModeBadge(receipt.payment_mode)}</td>
-                    <td class="text-end fw-bold text-success">₹${receipt.amount.toLocaleString()}</td>
+                    <td class="text-end fw-bold text-success">${receipt.amount.toLocaleString()}</td>
                     <td class="text-center">
                         <button class="btn btn-sm btn-outline-primary" onclick="event.stopPropagation(); showReceiptDetails(${idx})">
                             <i class="bi bi-eye"></i> View
@@ -425,10 +390,10 @@
             const modal = new bootstrap.Modal(document.getElementById('receiptModal'));
             
             // Debug: Log receipt data
-            console.log('📊 Receipt Data:', receipt);
-            console.log('📋 Invoice Allocations:', receipt.invoice_allocations);
-            console.log('🏢 Cost Center Allocations:', receipt.cost_center_allocations);
-            console.log('📚 Ledger Entries:', receipt.ledger_entries);
+            console.log(' Receipt Data:', receipt);
+            console.log(' Invoice Allocations:', receipt.invoice_allocations);
+            console.log(' Cost Center Allocations:', receipt.cost_center_allocations);
+            console.log(' Ledger Entries:', receipt.ledger_entries);
             
             let html = `
                 <div class="row g-3">
@@ -438,7 +403,7 @@
                             <tr><th width="40%">Receipt Number:</th><td>${receipt.receipt_number}</td></tr>
                             <tr><th>Date:</th><td>${formatDate(receipt.date)}</td></tr>
                             <tr><th>Customer:</th><td>${receipt.customer_name}</td></tr>
-                            <tr><th>Amount:</th><td class="fw-bold text-success">₹${receipt.amount.toLocaleString()}</td></tr>
+                            <tr><th>Amount:</th><td class="fw-bold text-success">${receipt.amount.toLocaleString()}</td></tr>
                         </table>
                     </div>
                     <div class="col-md-6">
@@ -446,7 +411,7 @@
                         <table class="table table-sm">
                             <tr><th width="40%">Payment Mode:</th><td>${getPaymentModeBadge(receipt.payment_mode)}</td></tr>
                             <tr><th>Bank Account:</th><td>${receipt.bank_account || 'N/A'}</td></tr>
-                            ${receipt.account_current_balance ? `<tr><th>Current Balance:</th><td>₹${receipt.account_current_balance.toLocaleString()} Cr</td></tr>` : ''}
+                            ${receipt.account_current_balance ? `<tr><th>Current Balance:</th><td>${receipt.account_current_balance.toLocaleString()} Cr</td></tr>` : ''}
                             <tr><th>Reference #:</th><td>${receipt.reference_number || 'N/A'}</td></tr>
                         </table>
                     </div>
@@ -475,7 +440,7 @@
                                         <tr>
                                             <td style="padding-left: 0px;"><strong>${alloc.bill_type || 'Agst Ref'}</strong></td>
                                             <td><strong>${alloc.invoice_number}</strong></td>
-                                            <td class="text-end"><strong>₹${alloc.amount.toLocaleString()} Cr</strong></td>
+                                            <td class="text-end"><strong>${alloc.amount.toLocaleString()} Cr</strong></td>
                                         </tr>
                                         ${costCenters.map((cc, idx) => {
                                             // Determine indentation level
@@ -485,7 +450,7 @@
                                             return `
                                                 <tr>
                                                     <td colspan="2" style="padding-left: ${paddingLeft};">${cc.category}</td>
-                                                    <td class="text-end">${cc.amount ? '₹' + cc.amount.toLocaleString() + ' Cr' : ''}</td>
+                                                    <td class="text-end">${cc.amount ? '' + cc.amount.toLocaleString() + ' Cr' : ''}</td>
                                                 </tr>
                                             `;
                                         }).join('')}
@@ -523,7 +488,7 @@
                                     return `
                                         <tr>
                                             <td colspan="2" style="padding-left: ${paddingLeft};">${cc.category}</td>
-                                            <td class="text-end">${cc.amount && cc.amount > 0 ? '₹' + cc.amount.toLocaleString() + ' Dr' : ''}</td>
+                                            <td class="text-end">${cc.amount && cc.amount > 0 ? '' + cc.amount.toLocaleString() + ' Dr' : ''}</td>
                                         </tr>
                                     `;
                                 }).join('') || ''}
@@ -552,16 +517,16 @@
                                     <tr>
                                         <td>${entry.ledger_name}</td>
                                         <td class="text-end ${entry.amount < 0 ? 'text-danger' : 'text-success'}">
-                                            ${entry.amount < 0 ? '(-)' : ''}₹${Math.abs(entry.amount).toLocaleString()} ${entry.amount < 0 ? 'Dr' : 'Cr'}
+                                            ${entry.amount < 0 ? '(-)' : ''}${Math.abs(entry.amount).toLocaleString()} ${entry.amount < 0 ? 'Dr' : 'Cr'}
                                         </td>
                                         <td class="text-end text-muted">
-                                            ${entry.current_balance ? '₹' + entry.current_balance.toLocaleString() + ' Cr' : '-'}
+                                            ${entry.current_balance ? '' + entry.current_balance.toLocaleString() + ' Cr' : '-'}
                                         </td>
                                     </tr>
                                 `).join('')}
                                 <tr class="table-light fw-bold">
                                     <td>Total</td>
-                                    <td class="text-end text-success">₹${receipt.amount.toLocaleString()}</td>
+                                    <td class="text-end text-success">${receipt.amount.toLocaleString()}</td>
                                     <td></td>
                                 </tr>
                             </tbody>
@@ -589,6 +554,216 @@
             );
             renderReceipts(filtered);
         }
-    </script>
+    
+        // Upload JSON Function
+        async function uploadJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const uploadBtn = event.target.nextElementSibling || document.querySelector('button[onclick="document.getElementById(\'jsonUpload\').click()"]');
+            const originalText = uploadBtn.innerHTML;
+            uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+            uploadBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/receipts/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    allReceipts = result.data || result.invoices || result.bills || result.receipts || result.sales_orders || result.purchase_orders || result.journals || [];
+                    localStorage.setItem('allReceipts', JSON.stringify(allReceipts));
+                    alert(result.message || 'JSON uploaded successfully!');
+                    renderReceipts();
+                } else {
+                    alert('Error uploading JSON: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to upload JSON file. See console for details.');
+            } finally {
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+                event.target.value = ''; // Reset file input
+            }
+        }
+
+        // --------------------------------------------------
+        // Job-based Import + Zoho Sync (SSE live console)
+        // --------------------------------------------------
+        let _receiptsJobId = null;
+        let _receiptsES = null;
+
+        function _showReceiptsConsole(show=true) {
+          const card = document.getElementById('receiptsConsoleCard');
+          if (card) card.style.display = show ? '' : 'none';
+        }
+
+        function clearReceiptsConsole() {
+          const pre = document.getElementById('receiptsConsole');
+          if (pre) pre.textContent = '';
+        }
+
+        function _appendReceiptsLine(line) {
+          const pre = document.getElementById('receiptsConsole');
+          if (!pre) return;
+          pre.textContent += (line || '') + "\\n";
+          pre.scrollTop = pre.scrollHeight;
+        }
+
+        function _setReceiptsConsoleStatus(text) {
+          const el = document.getElementById('receiptsConsoleStatus');
+          if (el) el.textContent = text || '';
+        }
+
+        function _setReceiptsButtons(running) {
+          const stopBtn = document.getElementById('receiptsStopBtn');
+          const fetchBtn = document.querySelector("button[onclick='fetchData()']") || document.querySelector('.btn-primary');
+          const syncBtn = document.querySelector("button[onclick='syncZoho()']") || document.querySelector('.btn-outline-primary');
+          if (fetchBtn) fetchBtn.disabled = !!running;
+          if (syncBtn) syncBtn.disabled = !!running;
+          if (stopBtn) stopBtn.disabled = !running;
+        }
+
+        async function stopReceiptsJob() {
+          if (!_receiptsJobId) return;
+          try {
+            await fetch(`/api/jobs/${_receiptsJobId}/stop`, { method: 'POST' });
+            _appendReceiptsLine('Stop requested.');
+            _setReceiptsConsoleStatus('Stopping...');
+          } catch (e) {
+            _appendReceiptsLine('Failed to request stop: ' + (e?.message || e));
+          }
+        }
+
+        async function _startReceiptsJob(url, payload, onDone) {
+          if (_receiptsES) {
+            try { _receiptsES.close(); } catch (e) {}
+            _receiptsES = null;
+          }
+          const res = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload || {}),
+          });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.status !== 'success' || !data.job_id) {
+            throw new Error(data.message || data.error || 'Failed to start job');
+          }
+          _receiptsJobId = data.job_id;
+          _appendReceiptsLine('Job ID: ' + _receiptsJobId);
+          _setReceiptsConsoleStatus('Running...');
+
+          _receiptsES = new EventSource(`/api/jobs/${_receiptsJobId}/stream`);
+          _receiptsES.addEventListener('log', (ev) => {
+            try {
+              const d = JSON.parse(ev.data || '{}');
+              if (d.message) _appendReceiptsLine(d.message);
+            } catch (e) {}
+          });
+          _receiptsES.addEventListener('done', (ev) => {
+            let d = {};
+            try { d = JSON.parse(ev.data || '{}'); } catch (e) {}
+            const result = d.result || {};
+            if (_receiptsES) {
+              try { _receiptsES.close(); } catch (e) {}
+              _receiptsES = null;
+            }
+            _setReceiptsButtons(false);
+            _setReceiptsConsoleStatus(result.status || 'done');
+            if (typeof onDone === 'function') onDone(result);
+          });
+        }
+
+        async function fetchData() {
+          const btn = document.querySelector("button[onclick='fetchData()']") || document.querySelector('.btn-primary');
+          const originalText = btn ? btn.innerHTML : '';
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Importing...';
+          }
+
+          _showReceiptsConsole(true);
+          clearReceiptsConsole();
+          _setReceiptsConsoleStatus('Starting...');
+          _setReceiptsButtons(true);
+
+          try {
+            const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+            const toDate = formatDateForAPI(document.getElementById('toDate').value);
+            const limit = document.getElementById('limitInput').value || null;
+
+            await _startReceiptsJob('/api/receipts/fetch/start', {
+              from_date: fromDate,
+              to_date: toDate,
+              limit: limit ? parseInt(limit) : null,
+            }, async () => {
+              try {
+                const dbRes = await fetch('/api/db/receipts');
+                if (dbRes.ok) {
+                  const dbData = await dbRes.json();
+                  allReceipts = dbData.receipts || [];
+                  totalAmount = dbData.total_amount || 0;
+                  localStorage.setItem('receiptsData', JSON.stringify(dbData));
+                  updateKPIs();
+                  renderReceipts(allReceipts);
+                }
+              } catch (e) {}
+            });
+          } catch (err) {
+            console.error(err);
+            alert('Error: ' + (err.message || err));
+            _setReceiptsButtons(false);
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+            }
+          }
+        }
+
+        async function syncZoho() {
+          if (!confirm('This will sync receipts to Zoho Books. Continue?')) return;
+
+          const btn = document.querySelector("button[onclick='syncZoho()']") || document.querySelector('.btn-outline-primary');
+          const originalText = btn ? btn.innerHTML : '';
+          if (btn) {
+            btn.disabled = true;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+          }
+
+          _showReceiptsConsole(true);
+          clearReceiptsConsole();
+          _setReceiptsConsoleStatus('Starting...');
+          _setReceiptsButtons(true);
+
+          try {
+            const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+            const toDate = formatDateForAPI(document.getElementById('toDate').value);
+            const limit = document.getElementById('limitInput').value || null;
+
+            await _startReceiptsJob('/api/receipts/zoho/sync/start', {
+              from_date: fromDate,
+              to_date: toDate,
+              limit: limit ? parseInt(limit) : null,
+            }, () => {});
+          } catch (err) {
+            console.error(err);
+            alert('Error: ' + (err.message || err));
+            _setReceiptsButtons(false);
+          } finally {
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+            }
+          }
+        }
+
+        </script>
 </body>
 </html>

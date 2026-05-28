@@ -8,255 +8,505 @@
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    
-    <style>
-        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
-        
-        /* Navbar */
-        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
-        
-        /* KPI Cards */
-        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
-        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
-        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
+    <!-- SheetJS for Excel export -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 
-        /* Main Content */
-        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
-        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
-        
-        /* Loading */
+    {% include '_sidebar_styles.html' %}
+
+    <style>
+        /* ── Zoho Books-inspired theme ── */
+        *, *::before, *::after { box-sizing: border-box; }
+        body { font-family: 'Inter', sans-serif; background: #f4f5f7; color: #1f2937; font-size: 14px; }
+
+        /* ── KPI Summary Strip ── */
+        .zb-kpi-strip {
+            display: flex; gap: 1px; background: #e5e7eb;
+            border-radius: 8px; overflow: hidden;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.08);
+            margin-bottom: 20px;
+        }
+        .zb-kpi-item {
+            flex: 1; background: #fff; padding: 16px 20px;
+            display: flex; flex-direction: column; gap: 4px;
+        }
+        .zb-kpi-item:first-child { border-radius: 8px 0 0 8px; }
+        .zb-kpi-item:last-child  { border-radius: 0 8px 8px 0; }
+        .zb-kpi-label { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.6px; }
+        .zb-kpi-value { font-size: 26px; font-weight: 700; color: #111827; line-height: 1; }
+        .zb-kpi-item.c1 .zb-kpi-value { color: #2563eb; }
+        .zb-kpi-item.c2 .zb-kpi-value { color: #059669; }
+        .zb-kpi-item.c3 .zb-kpi-value { color: #d97706; }
+        .zb-kpi-item.c4 .zb-kpi-value { color: #7c3aed; }
+
+        /* ── Toolbar (DB picker row) ── */
+        .zb-toolbar {
+            background: #fff; border-radius: 8px;
+            padding: 14px 18px; margin-bottom: 16px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+            display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end;
+        }
+        .zb-toolbar .form-label { font-size: 11px; font-weight: 600; color: #6b7280; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 5px; }
+        .zb-toolbar .form-control,
+        .zb-toolbar .form-select { font-size: 13px; border-color: #d1d5db; border-radius: 6px; height: 34px; padding: 0 10px; }
+        .zb-toolbar .form-control:focus,
+        .zb-toolbar .form-select:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.12); }
+        .zb-toolbar .btn { font-size: 13px; height: 34px; border-radius: 6px; white-space: nowrap; }
+        .zb-toolbar input[type="file"].form-control {
+            height: 34px;
+            padding: 4px 10px;
+        }
+        .zb-toolbar input[type="file"].form-control::file-selector-button {
+            height: 26px;
+            margin: 0 10px 0 0;
+            border-radius: 6px;
+        }
+
+        /* ── Main content card ── */
+        .content-card {
+            background: #fff; border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+            overflow: hidden;
+        }
+
+        /* ── Tab bar (Zoho Books-style underline tabs) ── */
+        .zb-tabs {
+            display: flex; gap: 0;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0 16px; background: #fff;
+            overflow-x: auto;
+        }
+        .zb-tabs .nav-link {
+            border: none; border-radius: 0;
+            border-bottom: 2px solid transparent;
+            padding: 10px 16px; font-size: 13px; font-weight: 500;
+            color: #6b7280; white-space: nowrap;
+            background: transparent;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .zb-tabs .nav-link:hover  { color: #111827; background: transparent; }
+        .zb-tabs .nav-link.active { color: #2563eb; border-bottom-color: #2563eb; background: transparent; }
+
+        /* ── Action bar under tabs ── */
+        .zb-actionbar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 16px; border-bottom: 1px solid #f3f4f6; background: #fff;
+        }
+        .zb-search {
+            display: flex; align-items: center;
+            border: 1px solid #d1d5db; border-radius: 6px;
+            background: #fff; padding: 0 10px; gap: 6px;
+            width: 260px; height: 32px;
+        }
+        .zb-search input {
+            border: none; outline: none; font-size: 13px;
+            color: #374151; width: 100%; background: transparent;
+        }
+        .zb-search i { color: #9ca3af; font-size: 14px; }
+        .zb-action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .zb-action-btns .btn { font-size: 12px; height: 30px; border-radius: 5px; padding: 0 12px; }
+
+        /* ── Table ── */
+        #dataTable { margin: 0; }
+        #dataTable thead tr { background: #f9fafb; }
+        #dataTable thead th {
+            font-size: 11px; font-weight: 600; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 1px solid #e5e7eb; padding: 10px 14px;
+            white-space: nowrap;
+        }
+        #dataTable tbody td { padding: 11px 14px; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        #dataTable tbody tr:hover { background: #f8faff; cursor: pointer; }
+        #dataTable tbody tr:last-child td { border-bottom: none; }
+
+        /* Name cell link style */
+        .zb-name-link { color: #2563eb; font-weight: 500; }
+        .zb-name-link:hover { text-decoration: underline; }
+
+        /* ── Type badges ── */
+        .zb-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+        }
+        .zb-badge-customer { background: #dbeafe; color: #1d4ed8; }
+        .zb-badge-vendor   { background: #d1fae5; color: #065f46; }
+        .zb-badge-other    { background: #f3f4f6; color: #6b7280; }
+
+        /* ── Offcanvas ── */
+        #detailOffcanvas { width: 440px !important; }
+        .zb-offcanvas-header {
+            background: #fff; border-bottom: 1px solid #e5e7eb;
+            padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .zb-offcanvas-header h5 { font-size: 15px; font-weight: 600; color: #111827; margin: 0; }
+        .zb-offcanvas-body { padding: 20px; background: #f9fafb; height: calc(100% - 57px); overflow-y: auto; }
+        .zb-detail-section { background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 14px; overflow: hidden; }
+        .zb-detail-section-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.6px; padding: 10px 14px; border-bottom: 1px solid #f3f4f6; background: #f9fafb; }
+        .zb-detail-row { display: flex; padding: 9px 14px; border-bottom: 1px solid #f3f4f6; }
+        .zb-detail-row:last-child { border-bottom: none; }
+        .zb-detail-label { width: 130px; font-size: 12px; color: #6b7280; font-weight: 500; flex-shrink: 0; }
+        .zb-detail-value { font-size: 13px; color: #111827; word-break: break-word; }
+        .zb-detail-value.highlight { color: #2563eb; font-weight: 600; }
+        .zb-balance-chip { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+        .zb-balance-chip.positive { background: #d1fae5; color: #065f46; }
+        .zb-balance-chip.negative { background: #fee2e2; color: #991b1b; }
+        .zb-balance-chip.neutral  { background: #f3f4f6; color: #374151; }
+
+        /* ── Empty state ── */
+        .zb-empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+        .zb-empty i { font-size: 40px; display: block; margin-bottom: 12px; color: #d1d5db; }
+        .zb-empty p { font-size: 14px; margin: 0; }
+
+        /* ── Column filter header ── */
+        .zb-th { position: relative; user-select: none; }
+        .zb-th-inner { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .filter-icon { font-size: 11px; color: #9ca3af; transition: color 0.15s; }
+        .filter-icon.active { color: #2563eb; }
+        .filter-dropdown {
+            display: none; position: absolute; top: calc(100% + 2px); left: 0;
+            z-index: 1000; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            min-width: 220px; max-height: 320px;
+            display: none; flex-direction: column;
+        }
+        .filter-dropdown.open { display: flex; }
+        .filter-search-box {
+            padding: 8px 10px; border-bottom: 1px solid #f3f4f6;
+        }
+        .filter-search-box input {
+            width: 100%; border: 1px solid #d1d5db; border-radius: 5px;
+            padding: 4px 8px; font-size: 12px; outline: none;
+        }
+        .filter-search-box input:focus { border-color: #2563eb; }
+        .filter-list { overflow-y: auto; max-height: 200px; padding: 6px 4px; }
+        .filter-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 5px 10px; border-radius: 5px; cursor: pointer;
+            font-size: 12px; color: #374151;
+        }
+        .filter-item:hover { background: #f3f8ff; }
+        .filter-item input[type=checkbox] { accent-color: #2563eb; width: 14px; height: 14px; }
+        .filter-footer {
+            padding: 8px 10px; border-top: 1px solid #f3f4f6;
+            display: flex; gap: 6px; justify-content: flex-end;
+        }
+        .filter-footer .btn { font-size: 11px; padding: 3px 10px; border-radius: 4px; }
+
+        /* ── Main content card ── */
+        .content-card {
+            background: #fff; border-radius: 8px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.07);
+            overflow: hidden;
+        }
+
+        /* ── Tab bar (Zoho Books-style underline tabs) ── */
+        .zb-tabs {
+            display: flex; gap: 0;
+            border-bottom: 1px solid #e5e7eb;
+            padding: 0 16px; background: #fff;
+            overflow-x: auto;
+        }
+        .zb-tabs .nav-link {
+            border: none; border-radius: 0;
+            border-bottom: 2px solid transparent;
+            padding: 10px 16px; font-size: 13px; font-weight: 500;
+            color: #6b7280; white-space: nowrap;
+            background: transparent;
+            transition: color 0.15s, border-color 0.15s;
+        }
+        .zb-tabs .nav-link:hover  { color: #111827; background: transparent; }
+        .zb-tabs .nav-link.active { color: #2563eb; border-bottom-color: #2563eb; background: transparent; }
+
+        /* ── Action bar under tabs ── */
+        .zb-actionbar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 10px 16px; border-bottom: 1px solid #f3f4f6; background: #fff;
+        }
+        .zb-search {
+            display: flex; align-items: center;
+            border: 1px solid #d1d5db; border-radius: 6px;
+            background: #fff; padding: 0 10px; gap: 6px;
+            width: 260px; height: 32px;
+        }
+        .zb-search input {
+            border: none; outline: none; font-size: 13px;
+            color: #374151; width: 100%; background: transparent;
+        }
+        .zb-search i { color: #9ca3af; font-size: 14px; }
+        .zb-action-btns { display: flex; gap: 8px; flex-wrap: wrap; }
+        .zb-action-btns .btn { font-size: 12px; height: 30px; border-radius: 5px; padding: 0 12px; }
+
+        /* ── Table ── */
+        #dataTable { margin: 0; }
+        #dataTable thead tr { background: #f9fafb; }
+        #dataTable thead th {
+            font-size: 11px; font-weight: 600; color: #6b7280;
+            text-transform: uppercase; letter-spacing: 0.5px;
+            border-bottom: 1px solid #e5e7eb; padding: 10px 14px;
+            white-space: nowrap;
+        }
+        #dataTable tbody td { padding: 11px 14px; font-size: 13px; color: #374151; border-bottom: 1px solid #f3f4f6; vertical-align: middle; }
+        #dataTable tbody tr:hover { background: #f8faff; cursor: pointer; }
+        #dataTable tbody tr:last-child td { border-bottom: none; }
+
+        /* Name cell link style */
+        .zb-name-link { color: #2563eb; font-weight: 500; }
+        .zb-name-link:hover { text-decoration: underline; }
+
+        /* ── Type badges ── */
+        .zb-badge {
+            display: inline-flex; align-items: center; gap: 4px;
+            padding: 2px 10px; border-radius: 12px; font-size: 11px; font-weight: 600;
+        }
+        .zb-badge-customer { background: #dbeafe; color: #1d4ed8; }
+        .zb-badge-vendor   { background: #d1fae5; color: #065f46; }
+        .zb-badge-other    { background: #f3f4f6; color: #6b7280; }
+
+        /* ── Offcanvas ── */
+        #detailOffcanvas { width: 440px !important; }
+        .zb-offcanvas-header {
+            background: #fff; border-bottom: 1px solid #e5e7eb;
+            padding: 16px 20px; display: flex; justify-content: space-between; align-items: center;
+        }
+        .zb-offcanvas-header h5 { font-size: 15px; font-weight: 600; color: #111827; margin: 0; }
+        .zb-offcanvas-body { padding: 20px; background: #f9fafb; height: calc(100% - 57px); overflow-y: auto; }
+        .zb-detail-section { background: #fff; border-radius: 8px; border: 1px solid #e5e7eb; margin-bottom: 14px; overflow: hidden; }
+        .zb-detail-section-title { font-size: 11px; font-weight: 700; color: #6b7280; text-transform: uppercase; letter-spacing: 0.6px; padding: 10px 14px; border-bottom: 1px solid #f3f4f6; background: #f9fafb; }
+        .zb-detail-row { display: flex; padding: 9px 14px; border-bottom: 1px solid #f3f4f6; }
+        .zb-detail-row:last-child { border-bottom: none; }
+        .zb-detail-label { width: 130px; font-size: 12px; color: #6b7280; font-weight: 500; flex-shrink: 0; }
+        .zb-detail-value { font-size: 13px; color: #111827; word-break: break-word; }
+        .zb-detail-value.highlight { color: #2563eb; font-weight: 600; }
+        .zb-balance-chip { display: inline-block; padding: 4px 12px; border-radius: 6px; font-size: 13px; font-weight: 600; }
+        .zb-balance-chip.positive { background: #d1fae5; color: #065f46; }
+        .zb-balance-chip.negative { background: #fee2e2; color: #991b1b; }
+        .zb-balance-chip.neutral  { background: #f3f4f6; color: #374151; }
+
+        /* ── Empty state ── */
+        .zb-empty { text-align: center; padding: 60px 20px; color: #9ca3af; }
+        .zb-empty i { font-size: 40px; display: block; margin-bottom: 12px; color: #d1d5db; }
+        .zb-empty p { font-size: 14px; margin: 0; }
+
+        /* ── Column filter header ── */
+        .zb-th { position: relative; user-select: none; }
+        .zb-th-inner { display: flex; align-items: center; gap: 6px; cursor: pointer; }
+        .filter-icon { font-size: 11px; color: #9ca3af; transition: color 0.15s; }
+        .filter-icon.active { color: #2563eb; }
+        .filter-dropdown {
+            display: none; position: absolute; top: calc(100% + 2px); left: 0;
+            z-index: 1000; background: #fff; border: 1px solid #e5e7eb;
+            border-radius: 8px; box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+            min-width: 220px; max-height: 320px;
+            display: none; flex-direction: column;
+        }
+        .filter-dropdown.open { display: flex; }
+        .filter-search-box {
+            padding: 8px 10px; border-bottom: 1px solid #f3f4f6;
+        }
+        .filter-search-box input {
+            width: 100%; border: 1px solid #d1d5db; border-radius: 5px;
+            padding: 4px 8px; font-size: 12px; outline: none;
+        }
+        .filter-search-box input:focus { border-color: #2563eb; }
+        .filter-list { overflow-y: auto; max-height: 200px; padding: 6px 4px; }
+        .filter-item {
+            display: flex; align-items: center; gap: 8px;
+            padding: 5px 10px; border-radius: 5px; cursor: pointer;
+            font-size: 12px; color: #374151;
+        }
+        .filter-item:hover { background: #f3f8ff; }
+        .filter-item input[type=checkbox] { accent-color: #2563eb; width: 14px; height: 14px; }
+        .filter-footer {
+            padding: 8px 10px; border-top: 1px solid #f3f4f6;
+            display: flex; gap: 6px; justify-content: flex-end;
+        }
+        .filter-footer .btn { font-size: 11px; padding: 3px 10px; border-radius: 4px; }
+
         #loading { display: none; }
     </style>
 </head>
 <body>
+    {% set active_page = 'ledgers' %}
+    <div class="app-shell">
+        {% include '_sidebar.html' %}
+        <main class="main">
+            {% set page_title = 'Ledger Management' %}
+            {% set page_subtitle = 'Import ledgers from Tally and sync to Zoho (customers, vendors, and chart of accounts).' %}
+            {% set show_org_switcher = true %}
+            {% set topbar_actions = '
+              <button onclick="syncZoho()" class="btn btn-outline-primary btn-sm d-flex align-items-center">
+                <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+              </button>
+              <button onclick="fetchData()" class="btn btn-primary btn-sm d-flex align-items-center">
+                <i class="bi bi-cloud-download me-2"></i> Import All Ledgers
+              </button>
+            ' %}
+            {% include '_topbar.html' %}
 
-    <!-- NAVBAR -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
-        <a class="navbar-brand d-flex align-items-center" href="#">
-            <i class="bi bi-wallet2 text-primary fs-3 me-2"></i>
-            <span class="fw-bold text-primary">Zen Migration</span>
-        </a>
-        <div class="collapse navbar-collapse ms-4">
-            <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-                <li class="nav-item me-3">
-                    <a class="nav-link active" href="/ledgers">
-                        <i class="bi bi-journal-text me-1"></i> Ledgers
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/items">
-                        <i class="bi bi-box-seam me-1"></i> Items
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/journals">
-                        <i class="bi bi-journal-bookmark me-1"></i> Journals
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/invoices">
-                        <i class="bi bi-receipt me-1"></i> Invoices
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/bills">
-                        <i class="bi bi-file-earmark-text me-1"></i> Bills
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/receipts">
-                        <i class="bi bi-cash-coin me-1"></i> Payment Received
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/payments_made">
-                        <i class="bi bi-cash-stack me-1"></i> Payments Made
-                    </a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
-                </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/sales_orders">
-                        <i class="bi bi-cart-check me-1"></i> Sales Orders
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/purchase_orders">
-                        <i class="bi bi-bag-check me-1"></i> Purchase Orders
-                    </a>
-                </li>
-                <li class="nav-item">
-                    <a class="nav-link" href="/opening-balance">
-                        <i class="bi bi-bank me-1"></i> Opening Balance
-                    </a>
-                </li>
-            </ul>
-        </div>
-    </nav>
+             {% set steps_title = 'Ledgers: Recommended Steps' %}
+             {% set steps = [
+              'Select the active Company DB from the Organizations switcher.',
+              'Import Master XML to load Groups/Ledgers into the DB.',
+              'Review counts (Customers/Vendors/Groups) and spot-check a few records.',
+              'Sync to Zoho to create/update chart of accounts and contacts.'
+             ] %}
+            {% include '_steps_card.html' %}
 
-    <div class="container-fluid py-4 px-4">
-        
-        <!-- HEADER & ACTIONS -->
-        <div class="d-flex justify-content-between align-items-center mb-4">
-            <div>
-                <h4 class="fw-bold mb-1">Ledger Management</h4>
-                <p class="text-muted small mb-0">Manage accounts, customers, vendors, and groups</p>
-            </div>
-            <div class="d-flex gap-2">
-                <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
-                    <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
-                </button>
-                <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
-                    <i class="bi bi-cloud-download me-2"></i> Import All Ledgers
-                </button>
+    <div class="container-fluid p-0">
+
+        <!-- MASTER IMPORT TOOLBAR (uses active Company DB from topbar switcher) -->
+        <div class="zb-toolbar">
+            <div class="d-flex flex-column flex-grow-1">
+                <label class="form-label">Import Master XML</label>
+                <div class="d-flex gap-2 align-items-center">
+                    <input id="masterXmlFile" type="file" class="form-control" accept=".xml" />
+                    <button class="btn btn-primary" onclick="importMasterXml()">
+                        <i class="bi bi-upload me-1"></i> Import
+                    </button>
+                </div>
+                <div class="small text-muted mt-1">Imports into the active Company DB selected in the top-right Organizations switcher.</div>
             </div>
         </div>
 
-        <!-- KPI CARDS -->
-        <div class="row g-3 mb-4">
-            <div class="col-md-3">
-                <div class="kpi-card" style="border-color: #5e35b1;">
-                    <div class="kpi-label">Total Ledgers</div>
-                    <div class="kpi-value" id="total-ledgers">0</div>
-                </div>
+        <!-- KPI STRIP -->
+        <div class="zb-kpi-strip">
+            <div class="zb-kpi-item c1">
+                <div class="zb-kpi-label">Total Ledgers</div>
+                <div class="zb-kpi-value" id="total-ledgers">0</div>
             </div>
-            <div class="col-md-3">
-                <div class="kpi-card" style="border-color: #1e88e5;">
-                    <div class="kpi-label">Customers</div>
-                    <div class="kpi-value" id="total-customers">0</div>
-                </div>
+            <div class="zb-kpi-item c2">
+                <div class="zb-kpi-label">Customers</div>
+                <div class="zb-kpi-value" id="total-customers">0</div>
             </div>
-            <div class="col-md-3">
-                <div class="kpi-card" style="border-color: #43a047;">
-                    <div class="kpi-label">Vendors</div>
-                    <div class="kpi-value" id="total-vendors">0</div>
-                </div>
+            <div class="zb-kpi-item c3">
+                <div class="zb-kpi-label">Vendors</div>
+                <div class="zb-kpi-value" id="total-vendors">0</div>
             </div>
-            <div class="col-md-3">
-                <div class="kpi-card" style="border-color: #fb8c00;">
-                    <div class="kpi-label">Groups</div>
-                    <div class="kpi-value" id="total-groups">0</div>
-                </div>
+            <div class="zb-kpi-item c4">
+                <div class="zb-kpi-label">Groups</div>
+                <div class="zb-kpi-value" id="total-groups">0</div>
             </div>
         </div>
 
-        <!-- TABS & CONTENT -->
+        <!-- MAIN CARD -->
         <div class="content-card">
-            <!-- Tab Navigation -->
-            <ul class="nav nav-pills mb-3">
-                <li class="nav-item">
-                    <button class="nav-link active" onclick="switchTab('all')">All Ledgers</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('customers')">Customers</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('vendors')">Vendors</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('others')">Others</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('groups')">Groups Structure</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('cost-categories')">Cost Categories</button>
-                </li>
-                <li class="nav-item">
-                    <button class="nav-link" onclick="switchTab('cost-centres')">Cost Centres</button>
-                </li>
-            </ul>
 
-            <!-- TABS CONTENT -->
-            <!-- Controls -->
-            <div class="p-3 border-bottom bg-light d-flex justify-content-between align-items-center">
-                <div class="input-group" style="max-width: 300px;">
-                    <span class="input-group-text bg-white border-end-0"><i class="bi bi-search text-muted"></i></span>
-                    <input type="text" id="searchInput" class="form-control border-start-0 ps-0" placeholder="Search..." onkeyup="handleSearch()">
+            <!-- UNDERLINE TABS -->
+            <div class="zb-tabs">
+                <button class="nav-link active" onclick="switchTab('all')">All Ledgers</button>
+                <button class="nav-link" onclick="switchTab('customers')">Customers</button>
+                <button class="nav-link" onclick="switchTab('vendors')">Vendors</button>
+                <button class="nav-link" onclick="switchTab('others')">Others</button>
+                <button class="nav-link" onclick="switchTab('groups')">Groups Structure</button>
+                <button class="nav-link" onclick="switchTab('cost-categories')">Cost Categories</button>
+                <button class="nav-link" onclick="switchTab('cost-centres')">Cost Centres</button>
+            </div>
+
+            <!-- ACTION BAR -->
+            <div class="zb-actionbar">
+                <div class="zb-search">
+                    <i class="bi bi-search"></i>
+                    <input type="text" id="searchInput" placeholder="Search ledgers..." onkeyup="handleSearch()">
                 </div>
-                
-                <!-- Buttons -->
-                <div class="d-flex gap-2">
-                    <button id="btnFieldMapping" class="btn btn-outline-dark btn-sm d-none" onclick="openMappingModal()">
-                        <i class="bi bi-diagram-3 me-2"></i> Field Mapping
+                <div class="zb-action-btns">
+                    <button id="btnFieldMapping" class="btn btn-outline-secondary d-none" onclick="openMappingModal()">
+                        <i class="bi bi-diagram-3 me-1"></i> Field Mapping
                     </button>
-                    <button id="btnGroupSync" class="btn btn-outline-success btn-sm d-none" onclick="executeGroupSync()">
-                        <i class="bi bi-cloud-upload me-2"></i> Sync Mapped Groups
+                    <button id="btnGroupSync" class="btn btn-outline-success d-none" onclick="executeGroupSync()">
+                        <i class="bi bi-cloud-upload me-1"></i> Sync Mapped Groups
                     </button>
-                    <!-- Customers Tab -->
-                    <button id="btnSyncCustomers" class="btn btn-info btn-sm d-none text-white" onclick="syncContacts('customer')">
-                        <i class="bi bi-people me-2"></i> Sync Customers → Zoho
+                    <button id="btnSyncCustomers" class="btn btn-primary d-none" onclick="syncContacts('customer')">
+                        <i class="bi bi-people me-1"></i> Sync Customers → Zoho
                     </button>
-                    <!-- Vendors Tab -->
-                    <button id="btnSyncVendors" class="btn btn-warning btn-sm d-none" onclick="syncContacts('vendor')">
-                        <i class="bi bi-building me-2"></i> Sync Vendors → Zoho
+                    <button id="btnSyncVendors" class="btn btn-success d-none" onclick="syncContacts('vendor')">
+                        <i class="bi bi-building me-1"></i> Sync Vendors → Zoho
                     </button>
-                    <!-- Cost Centres Tab -->
-                    <button id="btnSyncReportingTags" class="btn btn-primary btn-sm d-none" onclick="syncReportingTags()">
-                        <i class="bi bi-tags me-2"></i> Sync Reporting Tags → Zoho
+                    <button id="btnSyncReportingTags" class="btn btn-primary d-none" onclick="syncReportingTags()">
+                        <i class="bi bi-tags me-1"></i> Sync Reporting Tags → Zoho
+                    </button>
+                    <!-- Export Button -->
+                    <button class="btn btn-outline-secondary" onclick="exportToExcel()" title="Export to Excel">
+                        <i class="bi bi-file-earmark-excel me-1" style="color:#217346;"></i> Export
+                    </button>
+                    <!-- Clear Filters -->
+                    <button id="btnClearFilters" class="btn btn-outline-danger d-none" onclick="clearAllFilters()" title="Clear all column filters">
+                        <i class="bi bi-x-circle me-1"></i> Clear Filters
                     </button>
                 </div>
             </div>
 
+            <!-- TABLE CONTAINER -->
             <div id="ledgersTableContainer">
-                <!-- Table Content -->
-                <div class="table-responsive" style="max-height: 600px;">
+                <div class="table-responsive" style="max-height:600px;">
                     <table class="table table-hover align-middle mb-0" id="dataTable">
                         <thead class="sticky-top">
                             <tr id="tableHeader">
-                                <th>Name</th>
-                                <th>Parent Group</th>
-                                <th>GSTIN</th>
-                                <th>Closing Balance</th>
+                                <th class="zb-th" data-col="name">
+                                    <div class="zb-th-inner" onclick="toggleFilter('name', this)">
+                                        Name <i class="bi bi-funnel filter-icon" id="fi-name"></i>
+                                    </div>
+                                    <div class="filter-dropdown" id="fd-name"></div>
+                                </th>
+                                <th class="zb-th" data-col="parent">
+                                    <div class="zb-th-inner" onclick="toggleFilter('parent', this)">
+                                        Parent Group <i class="bi bi-funnel filter-icon" id="fi-parent"></i>
+                                    </div>
+                                    <div class="filter-dropdown" id="fd-parent"></div>
+                                </th>
+                                <th class="zb-th" data-col="gstin">
+                                    <div class="zb-th-inner" onclick="toggleFilter('gstin', this)">
+                                        GSTIN <i class="bi bi-funnel filter-icon" id="fi-gstin"></i>
+                                    </div>
+                                    <div class="filter-dropdown" id="fd-gstin"></div>
+                                </th>
+                                <th class="zb-th" data-col="closing_balance">
+                                    <div class="zb-th-inner" onclick="toggleFilter('closing_balance', this)">
+                                        Closing Balance <i class="bi bi-funnel filter-icon" id="fi-closing_balance"></i>
+                                    </div>
+                                    <div class="filter-dropdown" id="fd-closing_balance"></div>
+                                </th>
                             </tr>
                         </thead>
                         <tbody id="tableBody">
                             <tr>
-                                <td colspan="4" class="text-center py-5 text-muted">
-                                    <i class="bi bi-cloud-arrow-down fs-1 mb-2"></i><br>
-                                    Click "Import All Ledgers" to fetch data
+                                <td colspan="4">
+                                    <div class="zb-empty">
+                                        <i class="bi bi-journal-text"></i>
+                                        <p>Click <strong>Import All Ledgers</strong> to fetch data from Tally</p>
+                                    </div>
                                 </td>
                             </tr>
                         </tbody>
                     </table>
-                    <div id="treeView" class="p-4 d-none">
-                        <!-- Tree view content -->
-                    </div>
+                    <div id="treeView" class="p-4 d-none"></div>
                 </div>
             </div>
 
             <div id="costCategoriesContainer" style="display:none;">
                 <table class="table table-hover align-middle">
-                    <thead class="table-light"><tr><th>Name</th><th>Alloc Revenue</th><th>Alloc Non-Revenue</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Alloc Revenue</th><th>Alloc Non-Revenue</th></tr></thead>
                     <tbody id="costCategoriesBody"></tbody>
                 </table>
             </div>
 
             <div id="costCentresContainer" style="display:none;">
                 <table class="table table-hover align-middle">
-                    <thead class="table-light"><tr><th>Name</th><th>Category</th><th>Parent</th></tr></thead>
+                    <thead><tr><th>Name</th><th>Category</th><th>Parent</th></tr></thead>
                     <tbody id="costCentresBody"></tbody>
                 </table>
-                <!-- Reporting Tags Sync Results -->
                 <div id="reportingTagsResultPanel" class="p-3"></div>
             </div>
-            
-        </div>
-    </div>
 
-    <!-- OFF CANVAS FOR DETAILS -->
-    <div class="offcanvas offcanvas-end" tabindex="-1" id="detailOffcanvas" style="width: 500px;">
-        <div class="offcanvas-header bg-light border-bottom">
-            <h5 class="offcanvas-title fw-bold" id="offcanvasLabel">Ledger Details</h5>
+        </div><!-- /content-card -->
+    </div><!-- /container-fluid -->
+
+    <!-- OFFCANVAS DETAIL PANEL -->
+    <div class="offcanvas offcanvas-end" tabindex="-1" id="detailOffcanvas">
+        <div class="zb-offcanvas-header">
+            <h5 id="offcanvasLabel">Ledger Details</h5>
             <button type="button" class="btn-close" data-bs-dismiss="offcanvas"></button>
         </div>
-        <div class="offcanvas-body" id="offcanvasBody">
-            <!-- Details loaded here -->
-        </div>
+        <div class="zb-offcanvas-body" id="offcanvasBody"></div>
     </div>
 
     <!-- FIELD MAPPING MODAL -->
@@ -295,16 +545,41 @@
     </div>
 
     <!-- SCRIPTS -->
+    </div>
+        </main>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let allData = { ledgers: [], groups: [], group_hierarchy: {}, stats: {} };
         let currentTab = 'all';
 
 
-        // Load data on startup
+        // Load data on startup (uses the active Company DB from topbar switcher)
         document.addEventListener('DOMContentLoaded', () => {
             loadFromDB();
         });
+
+        async function importMasterXml() {
+            const f = document.getElementById('masterXmlFile')?.files?.[0];
+            if (!f) { alert('Please choose Master.xml first'); return; }
+            const fd = new FormData();
+            fd.append('master_file', f);
+
+            try {
+                const res = await fetch('/api/db/import-masters', { method: 'POST', body: fd });
+                const data = await res.json();
+                if (!res.ok || data.error) {
+                    alert('Import failed: ' + (data.error || res.statusText));
+                    return;
+                }
+                await loadFromDB();
+                const imp = data.imported || {};
+                alert(`Imported to ${data.active_db}\nGroups: ${imp.groups || 0}\nLedgers: ${imp.ledgers || 0}\nItems: ${imp.items || 0}`);
+            } catch (e) {
+                alert('Import failed: ' + e.message);
+            }
+        }
 
         async function loadFromDB() {
             try {
@@ -334,7 +609,7 @@
                 if (centsData.centres) allData.costCentres = centsData.centres;
 
                 // Debug logging
-                console.log('📊 Data Loaded:', {
+                console.log(' Data Loaded:', {
                     ledgers: allData.ledgers?.length || 0,
                     groups: allData.groups?.length || 0,
                     costCategories: allData.costCategories?.length || 0,
@@ -365,24 +640,24 @@
         function switchTab(tab) {
             currentTab = tab;
             
-            // Update UI buttons - only within nav-pills
-            const buttons = document.querySelectorAll('.nav-pills .nav-link');
+            // Update UI buttons - only within zb-tabs
+            const buttons = document.querySelectorAll('.zb-tabs .nav-link');
             buttons.forEach(btn => btn.classList.remove('active'));
 
             // Check if triggered by click event on a valid nav-link
             if (event && event.type === 'click' && event.target.classList.contains('nav-link')) {
                 event.target.classList.add('active');
             } else {
-                 if (tab === 'all') buttons[0].classList.add('active');
-                 else if (tab === 'customers') buttons[1].classList.add('active');
-                 else if (tab === 'vendors') buttons[2].classList.add('active');
-                 else if (tab === 'others') buttons[3].classList.add('active');
-                 else if (tab === 'groups') buttons[4].classList.add('active');
-                 else if (tab === 'cost-categories') buttons[5].classList.add('active');
-                 else if (tab === 'cost-centres') buttons[6].classList.add('active');
+                 if (tab === 'all') buttons[0]?.classList.add('active');
+                 else if (tab === 'customers') buttons[1]?.classList.add('active');
+                 else if (tab === 'vendors') buttons[2]?.classList.add('active');
+                 else if (tab === 'others') buttons[3]?.classList.add('active');
+                 else if (tab === 'groups') buttons[4]?.classList.add('active');
+                 else if (tab === 'cost-categories') buttons[5]?.classList.add('active');
+                 else if (tab === 'cost-centres') buttons[6]?.classList.add('active');
             }
 
-            // Toggle all action buttons — hide all first, then show per-tab
+            // Toggle all action buttons  hide all first, then show per-tab
             const btnMapping      = document.getElementById('btnFieldMapping');
             const btnGroupSync    = document.getElementById('btnGroupSync');
             const btnReportingTags = document.getElementById('btnSyncReportingTags');
@@ -555,40 +830,223 @@
         }
 
 
+        // ── Column filter state ──
+        const colFilters = { name: new Set(), parent: new Set(), gstin: new Set(), closing_balance: new Set() };
+        let currentRows = [];
+
         function renderTable(rows) {
+            currentRows = rows || [];
             const tbody = document.getElementById('tableBody');
             if (!rows || rows.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="4" class="text-center py-4 text-muted">No Data Found</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="4"><div class="zb-empty"><i class="bi bi-inbox"></i><p>No data found</p></div></td></tr>';
                 return;
             }
-
-            // Using onclick with escaped JSON safely
-            window.rowClick = (index) => {
-                let list = [];
-                if (currentTab === 'all') list = allData.ledgers;
-                else if (currentTab === 'customers') list = allData.customers;
-                else if (currentTab === 'vendors') list = allData.vendors;
-                // Important: If searching, we need to pass the actual object. 
-                // For simplicity, let's look up by name if possible, or simple index if list is consistent.
-                // Better: Just pass the object to showDetails directly
-            };
-
-            tbody.innerHTML = rows.map((r, i) => `
-                <tr onclick="showDetails('${r.name.replace(/'/g, "\\'")}')" style="cursor: pointer;">
-                    <td class="fw-medium text-primary">${r.name}</td>
-                    <td><span class="badge bg-light text-dark border">${r.parent}</span></td>
-                    <td>${r.gstin || '-'}</td>
-                    <td class="fw-bold">${r.closing_balance || '-'}</td>
+            tbody.innerHTML = rows.map(r => `
+                <tr onclick="showDetails('${(r.name||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;')}')" style="cursor:pointer;">
+                    <td class="zb-name-link">${r.name}</td>
+                    <td><span style="font-size:12px;color:#6b7280;">${r.parent || '-'}</span></td>
+                    <td style="font-family:monospace;font-size:12px;">${r.gstin || '-'}</td>
+                    <td style="font-weight:600;">${r.closing_balance || '-'}</td>
                 </tr>
             `).join('');
+        }
+
+        // ── Filter dropdown ──
+        function toggleFilter(col, triggerEl) {
+            // Close all other dropdowns first
+            document.querySelectorAll('.filter-dropdown.open').forEach(d => {
+                if (d.id !== 'fd-' + col) d.classList.remove('open');
+            });
+            const dd = document.getElementById('fd-' + col);
+            const isOpen = dd.classList.contains('open');
+            if (isOpen) { dd.classList.remove('open'); return; }
+            buildFilterDropdown(col, dd);
+            dd.classList.add('open');
+        }
+
+        function buildFilterDropdown(col, dd) {
+            // Collect unique values from ALL rows in current tab (not just filtered)
+            let baseRows = getBaseRows();
+            const vals = new Set();
+            baseRows.forEach(r => vals.add(String(r[col] || '-')));
+            const sorted = [...vals].sort();
+            const selected = colFilters[col]; // Set of currently active filters
+
+            // If no filter active = all checked; else only the saved ones are checked
+            const allActive = selected.size === 0;
+
+            dd.innerHTML = `
+                <div class="filter-search-box">
+                    <input type="text" placeholder="Search values..." oninput="filterDropdownSearch(this,'${col}')" id="fds-${col}">
+                </div>
+                <div class="filter-list" id="fl-${col}">
+                    <div class="filter-item" id="fi-all-row-${col}">
+                        <input type="checkbox" id="fchk-all-${col}" ${allActive ? 'checked' : ''}
+                            onchange="col_toggleSelectAll('${col}', this)">
+                        <label for="fchk-all-${col}" style="cursor:pointer;font-weight:600;">(Select All)</label>
+                    </div>
+                    ${sorted.map(v => `
+                        <div class="filter-item">
+                            <input type="checkbox"
+                                data-col="${col}"
+                                value="${v.replace(/"/g, '&quot;')}"
+                                ${allActive || selected.has(v) ? 'checked' : ''}
+                                onchange="col_onFilterCheck('${col}', this)">
+                            <label style="cursor:pointer;">${v}</label>
+                        </div>
+                    `).join('')}
+                </div>
+                <div class="filter-footer">
+                    <button class="btn btn-secondary" onclick="cancelFilter('${col}')">Cancel</button>
+                    <button class="btn btn-primary" onclick="applyFilter('${col}')">Apply</button>
+                </div>
+            `;
+
+            // Set indeterminate state if partially selected
+            col_syncSelectAllState(col);
+        }
+
+        function filterDropdownSearch(inp, col) {
+            const q = inp.value.toLowerCase();
+            document.querySelectorAll(`#fl-${col} .filter-item`).forEach((item, i) => {
+                if (i === 0) return; // skip Select All
+                item.style.display = item.textContent.toLowerCase().includes(q) ? '' : 'none';
+            });
+        }
+
+        // Helper: sync the Select All checkbox — simple 2-state
+        function col_syncSelectAllState(col) {
+            const allChk = document.getElementById('fchk-all-' + col);
+            if (!allChk) return;
+            const items = [...document.querySelectorAll(`input[data-col="${col}"]`)];
+            const allChecked = items.length > 0 && items.every(c => c.checked);
+            allChk.checked = allChecked;
+            allChk.indeterminate = false;
+        }
+
+        function col_toggleSelectAll(col, chk) {
+            const state = chk.checked; // true = check all, false = uncheck all
+            document.querySelectorAll(`input[data-col="${col}"]`).forEach(c => {
+                c.checked = state;
+            });
+            chk.indeterminate = false;
+        }
+
+        function col_onFilterCheck(col, chk) {
+            col_syncSelectAllState(col);
+        }
+
+        function applyFilter(col) {
+            // Use data-col to get ONLY the value checkboxes (not the Select All checkbox)
+            const allItems = [...document.querySelectorAll(`input[data-col="${col}"]`)];
+            const checked  = allItems.filter(c => c.checked).map(c => c.value);
+            const allChecked = checked.length === allItems.length;
+            // If all checked = no filter (show everything); else filter to checked values
+            colFilters[col] = allChecked ? new Set() : new Set(checked);
+            // Update funnel icon colour
+            const icon = document.getElementById('fi-' + col);
+            if (icon) icon.classList.toggle('active', colFilters[col].size > 0);
+            document.getElementById('fd-' + col).classList.remove('open');
+            applyAllFilters();
+            updateClearFiltersBtn();
+        }
+
+        function cancelFilter(col) {
+            document.getElementById('fd-' + col).classList.remove('open');
+        }
+
+        function applyAllFilters() {
+            let rows = getBaseRows();
+            // Apply search
+            const q = (document.getElementById('searchInput')?.value || '').toLowerCase();
+            if (q) rows = rows.filter(r => (r.name || '').toLowerCase().includes(q));
+            // Apply column filters
+            for (const [col, vals] of Object.entries(colFilters)) {
+                if (vals.size > 0) {
+                    rows = rows.filter(r => vals.has(String(r[col] || '-')));
+                }
+            }
+            renderTable(rows);
+        }
+
+        function getBaseRows() {
+            if (currentTab === 'customers') return allData.customers || [];
+            if (currentTab === 'vendors')   return allData.vendors || [];
+            if (currentTab === 'others')    return allData.others || [];
+            return allData.ledgers || [];
+        }
+
+        function clearAllFilters() {
+            for (const col of Object.keys(colFilters)) {
+                colFilters[col] = new Set();
+                const icon = document.getElementById('fi-' + col);
+                if (icon) icon.classList.remove('active');
+            }
+            document.getElementById('searchInput').value = '';
+            updateClearFiltersBtn();
+            applyAllFilters();
+        }
+
+        function updateClearFiltersBtn() {
+            const anyActive = Object.values(colFilters).some(s => s.size > 0);
+            const btn = document.getElementById('btnClearFilters');
+            if (btn) btn.classList.toggle('d-none', !anyActive);
+        }
+
+        // Close dropdowns on outside click
+        document.addEventListener('click', e => {
+            if (!e.target.closest('.zb-th')) {
+                document.querySelectorAll('.filter-dropdown.open').forEach(d => d.classList.remove('open'));
+            }
+        });
+
+        // ── Export to Excel ──
+        function exportToExcel() {
+            const rows = currentRows.length > 0 ? currentRows : getBaseRows();
+            if (!rows || rows.length === 0) { alert('No data to export.'); return; }
+            const exportData = rows.map(r => ({
+                'Name': r.name || '',
+                'Type': r.type || '',
+                'Parent Group': r.parent || '',
+                'GSTIN': r.gstin || '',
+                'PAN': r.pan || '',
+                'GST Reg Type': r.gst_reg_type || '',
+                'State': r.state || '',
+                'Country': r.country || '',
+                'Pincode': r.pincode || '',
+                'Phone': r.phone || '',
+                'Email': r.email || '',
+                'Opening Balance': r.opening_balance || '',
+                'Closing Balance': r.closing_balance || ''
+            }));
+            const ws = XLSX.utils.json_to_sheet(exportData);
+            // Auto-fit column widths
+            const colWidths = Object.keys(exportData[0]).map(k => ({ wch: Math.max(k.length, 15) }));
+            ws['!cols'] = colWidths;
+            const wb = XLSX.utils.book_new();
+            const tabLabel = currentTab.charAt(0).toUpperCase() + currentTab.slice(1);
+            XLSX.utils.book_append_sheet(wb, ws, tabLabel);
+            const filename = `Ledgers_${tabLabel}_${new Date().toISOString().slice(0,10)}.xlsx`;
+            XLSX.writeFile(wb, filename);
         }
 
         function showDetails(name) {
             const ledger = allData.ledgers.find(l => l.name === name);
             if (!ledger) return;
 
-            // Generate Address Lines HTML
-            const addressHtml = (ledger.address_lines || []).map(line => `<div>${line}</div>`).join('') || '<div class="text-muted">No address provided</div>';
+            // Generate Address Lines HTML (DB ledgers use `address` string; Tally fetch may use `address_lines` array)
+            let addrLines = [];
+            if (Array.isArray(ledger.address_lines) && ledger.address_lines.length > 0) {
+                addrLines = ledger.address_lines;
+            } else if (ledger.address && String(ledger.address).trim()) {
+                const raw = String(ledger.address);
+                addrLines = raw
+                    .split(/\r?\n|,/g)
+                    .map(s => s.trim())
+                    .filter(Boolean);
+                if (addrLines.length === 0) addrLines = [raw.trim()];
+            }
+            const addressHtml = addrLines.map(line => `<div>${line}</div>`).join('') || '<div class="text-muted">No address provided</div>';
             
             // Determine Badge Text & Color
             let typeBadge = '';
@@ -709,21 +1167,12 @@
         }
 
         function handleSearch() {
-            const q = document.getElementById('searchInput').value.toLowerCase();
-            
             if (currentTab === 'groups') {
+                const q = document.getElementById('searchInput').value.toLowerCase();
                 renderGroupsTree(q);
                 return;
             }
-            
-            let list = [];
-            if (currentTab === 'all') list = allData.ledgers;
-            else if (currentTab === 'customers') list = allData.customers;
-            else if (currentTab === 'vendors') list = allData.vendors;
-            else if (currentTab === 'others') list = allData.others;
-
-            const filtered = list.filter(i => i.name.toLowerCase().includes(q));
-            renderTable(filtered);
+            applyAllFilters();
         }
         // -----------------------------------------------------
         // FIELD MAPPING LOGIC
@@ -735,7 +1184,7 @@
         
         let currentMapping = {}; // Stores mapping: { 'Tally Group Name': 'Zoho Account Type' }
 
-        // ── Groups excluded from Chart of Accounts mapping ──────────────────
+        //  Groups excluded from Chart of Accounts mapping 
         // These are handled as Zoho Contacts (customers/vendors), NOT accounts.
         // Must match the EXCLUDED_GROUPS set in ledgers_backend.py exactly.
         const EXCLUDED_GROUPS = new Set([
@@ -747,7 +1196,7 @@
             return EXCLUDED_GROUPS.has((name || '').toLowerCase().trim()) ||
                    EXCLUDED_GROUPS.has((parent || '').toLowerCase().trim());
         }
-        // ────────────────────────────────────────────────────────────────────
+        // 
 
         function selectZohoType(element) {
             event.preventDefault();
@@ -947,7 +1396,7 @@
                 });
             }
 
-            // Build Full Tree — exclude Sundry Debtors/Creditors and descendants
+            // Build Full Tree  exclude Sundry Debtors/Creditors and descendants
             const excludedNamesModal = new Set(EXCLUDED_GROUPS);
             (allData.groups || []).forEach(g => {
                 if (excludedNamesModal.has((g.parent || '').toLowerCase().trim())) {
@@ -1023,12 +1472,12 @@
                const data = await res.json();
                
                if (data.status === 'success') {
-                   alert('✅ Mapping Saved Successfully!');
+                   alert('Mapping saved successfully.');
                    const el = document.getElementById('mappingModal');
                    const modal = bootstrap.Modal.getInstance(el);
                    modal.hide();
                } else {
-                   alert('❌ Error Saving: ' + data.message);
+                   alert('Error saving: ' + data.message);
                }
            } catch (err) {
                console.error(err);
@@ -1062,7 +1511,7 @@
             if (resultsDiv) resultsDiv.innerHTML = '';
 
             try {
-               const res = await fetch('/api/ledgers/execute_group_sync', { 
+               const res = await fetch('/api/ledgers/execute_group_sync', {
                    method: 'POST',
                    headers: {'Content-Type': 'application/json'}
                });
@@ -1125,7 +1574,7 @@
                         <!-- Summary Card -->
                         <div class="card border-0 shadow-sm mb-3">
                             <div class="card-header bg-success text-white fw-bold">
-                                ✅ Sync Complete
+                                 Sync Complete
                             </div>
                             <div class="card-body">
                                 <div class="row text-center g-2">
@@ -1146,7 +1595,7 @@
                        html += `
                         <div class="card border-danger shadow-sm mb-3">
                             <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
-                                <span>⚠️ Failed Ledgers — Review Required (${failedLedgers.length})</span>
+                                <span>Failed Ledgers  Review Required (${failedLedgers.length})</span>
                                 <span class="badge bg-white text-danger">Select & Create in Bulk</span>
                             </div>
                             <div class="card-body border-bottom pb-3">
@@ -1160,12 +1609,12 @@
                                     </div>
                                     <div class="col-md-3">
                                         <button class="btn btn-success w-100 fw-bold" onclick="createAllSelected()">
-                                            ✅ Create All Selected
+                                             Create All Selected
                                         </button>
                                     </div>
                                     <div class="col-md-3">
                                         <button class="btn btn-outline-secondary w-100" onclick="toggleSelectAll()">
-                                            ☑️ Select / Deselect All
+                                             Select / Deselect All
                                         </button>
                                     </div>
                                     <div class="col-md-2 text-end">
@@ -1227,7 +1676,7 @@
                        html += `
                         <div class="card border-warning shadow-sm mb-3">
                             <div class="card-header bg-warning text-dark fw-bold">
-                                🔁 Duplicate Accounts Found in Zoho Books (${duplicates.length})
+                                 Duplicate Accounts Found in Zoho Books (${duplicates.length})
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
@@ -1252,8 +1701,8 @@
                        html += `
                         <div class="card border-secondary shadow-sm mb-3">
                             <div class="card-header bg-secondary text-white fw-bold d-flex justify-content-between align-items-center">
-                                <span>🔁 Duplicate Ledger Names in Tally (${tallyDuplicates.length})</span>
-                                <span class="badge bg-white text-secondary">These cause count mismatch — only first occurrence synced</span>
+                                <span> Duplicate Ledger Names in Tally (${tallyDuplicates.length})</span>
+                                <span class="badge bg-white text-secondary">These cause count mismatch  only first occurrence synced</span>
                             </div>
                             <div class="card-body p-0">
                                 <div class="table-responsive">
@@ -1284,13 +1733,13 @@
                        html += `
                         <div class="card border-danger shadow-sm mb-3">
                             <div class="card-header bg-danger bg-opacity-75 text-white fw-bold d-flex justify-content-between align-items-center">
-                                <span>⚠️ Group & Ledger Share Same Name — Count Mismatch (${groupLedgerCollisions.length})</span>
-                                <span class="badge bg-white text-danger">Zoho skips these — causing ${groupLedgerCollisions.length} missing accounts</span>
+                                <span>Group & Ledger Share Same Name  Count Mismatch (${groupLedgerCollisions.length})</span>
+                                <span class="badge bg-white text-danger">Zoho skips these  causing ${groupLedgerCollisions.length} missing accounts</span>
                             </div>
                             <div class="card-body p-0">
                                 <div class="alert alert-warning m-2 py-2 small">
                                     <strong>Why count mismatches:</strong> These names exist as both a <strong>Group (header)</strong> and a <strong>Ledger</strong> in Tally. 
-                                    Zoho Books treats them as one account and skips the ledger — causing your count to be <strong>${groupLedgerCollisions.length} less</strong> than expected.
+                                    Zoho Books treats them as one account and skips the ledger  causing your count to be <strong>${groupLedgerCollisions.length} less</strong> than expected.
                                 </div>
                                 <div class="table-responsive">
                                     <table class="table table-sm table-hover mb-0">
@@ -1298,7 +1747,7 @@
                                             <tr>
                                                 <th>#</th>
                                                 <th>Name (exists as BOTH Group & Ledger)</th>
-                                                <th>As Ledger → under Parent</th>
+                                                <th>As Ledger  under Parent</th>
                                                 <th>As Group (Header)</th>
                                             </tr>
                                         </thead>
@@ -1326,7 +1775,7 @@
                    panel.outerHTML = html;
 
                } else {
-                   alert('❌ Sync Error: ' + (data.message || 'Unknown error'));
+                   alert('Sync Error: ' + (data.message || 'Unknown error'));
                }
             } catch (err) {
                console.error(err);
@@ -1356,7 +1805,7 @@
              // If called from button (no arg), toggle based on current state
              if (state === undefined) {
                  const anyUnchecked = [...chks].some(c => !c.checked);
-                 state = anyUnchecked; // if any unchecked → check all; else uncheck all
+                 state = anyUnchecked; // if any unchecked  check all; else uncheck all
              }
              chks.forEach(c => c.checked = state);
              updateSelectedCount();
@@ -1379,7 +1828,7 @@
                  const rowType = document.getElementById(`standaloneType_${idx}`)?.value || '';
                  const finalType = rowType || bulkType;
                  if (!finalType) {
-                     alert(`⚠️ No account type set for row ${parseInt(idx)+1}.\nEither select a type in the row, or set a Bulk Type at the top.`);
+                     alert(`No account type set for row ${parseInt(idx)+1}.\nEither select a type in the row, or set a Bulk Type at the top.`);
                      return;
                  }
                  const ledger = window._failedLedgers[idx];
@@ -1415,27 +1864,27 @@
                          done++;
                          const row = document.getElementById(`failedRow_${item.idx}`);
                          if (row) row.classList.add('table-success');
-                         if (statusCell) statusCell.innerHTML = `<span class="badge bg-success">✅ Created</span>`;
+                         if (statusCell) statusCell.innerHTML = `<span class="badge bg-success"> Created</span>`;
                          // Uncheck the row
                          const chk = document.querySelector(`.failed-chk[data-idx="${item.idx}"]`);
                          if (chk) { chk.checked = false; chk.disabled = true; }
                      } else {
                          failed++;
-                         if (statusCell) statusCell.innerHTML = `<span class="badge bg-danger" title="${data.message}">❌ Failed</span>`;
+                         if (statusCell) statusCell.innerHTML = `<span class="badge bg-danger" title="${data.message}">Failed</span>`;
                      }
                  } catch (err) {
                      failed++;
-                     if (statusCell) statusCell.innerHTML = `<span class="badge bg-danger">❌ Error</span>`;
+                     if (statusCell) statusCell.innerHTML = `<span class="badge bg-danger">Error</span>`;
                  }
              }
 
              // Final progress
              if (progressFill) { progressFill.style.width = '100%'; progressFill.textContent = '100%'; progressFill.classList.remove('progress-bar-animated'); }
-             if (progressText) progressText.innerHTML = `<strong class="text-success">✅ ${done} created</strong>${failed > 0 ? ` &nbsp; <strong class="text-danger">❌ ${failed} failed</strong>` : ''}`;
+             if (progressText) progressText.innerHTML = `<strong class="text-success"> ${done} created</strong>${failed > 0 ? ` &nbsp; <strong class="text-danger">${failed} failed</strong>` : ''}`;
              updateSelectedCount();
          }
 
-         // ---- Sync Cost Categories → Zoho Reporting Tags ----
+         // ---- Sync Cost Categories  Zoho Reporting Tags ----
          async function syncReportingTags() {
              const btn = document.getElementById('btnSyncReportingTags');
              const originalText = btn.innerHTML;
@@ -1462,7 +1911,7 @@
                          <!-- Summary -->
                          <div class="card border-0 shadow-sm mb-3">
                              <div class="card-header bg-success text-white fw-bold">
-                                 🏷️ Reporting Tags Sync Complete
+                                  Reporting Tags Sync Complete
                              </div>
                              <div class="card-body">
                                  <div class="row text-center g-2">
@@ -1496,7 +1945,7 @@
 
                          <!-- Per-Category Details -->
                          <div class="card border-0 shadow-sm">
-                             <div class="card-header bg-light fw-bold">📋 Per-Category Results</div>
+                             <div class="card-header bg-light fw-bold"> Per-Category Results</div>
                              <div class="card-body p-0">
                                  <table class="table table-sm table-hover mb-0 align-middle">
                                      <thead class="table-light">
@@ -1514,10 +1963,10 @@
 
                      results.forEach((r, i) => {
                          const statusBadge = r.status === 'created'
-                             ? `<span class="badge bg-success">✅ Created</span>`
+                             ? `<span class="badge bg-success"> Created</span>`
                              : r.status === 'skipped'
-                             ? `<span class="badge bg-secondary">⏭️ Skipped</span>`
-                             : `<span class="badge bg-danger" title="${r.error || ''}">❌ Failed</span>`;
+                             ? `<span class="badge bg-secondary"> Skipped</span>`
+                             : `<span class="badge bg-danger" title="${r.error || ''}">Failed</span>`;
 
                          const rowClass = r.status === 'failed' ? 'table-danger' : '';
 
@@ -1526,9 +1975,9 @@
                          let optHtml = '';
                          if (r.option_details && r.option_details.length > 0) {
                              const optRows = r.option_details.map(o => {
-                                 const ob = o.status === 'created' ? `<span class="badge bg-success-subtle text-success border">✅ Created</span>`
-                                          : o.status === 'skipped' ? `<span class="badge bg-light text-muted border">⏭️ Skipped</span>`
-                                          : `<span class="badge bg-danger-subtle text-danger border" title="${o.error||''}">❌ Failed</span>`;
+                                 const ob = o.status === 'created' ? `<span class="badge bg-success-subtle text-success border"> Created</span>`
+                                          : o.status === 'skipped' ? `<span class="badge bg-light text-muted border"> Skipped</span>`
+                                          : `<span class="badge bg-danger-subtle text-danger border" title="${o.error||''}">Failed</span>`;
                                  return `<tr><td class="ps-3 small">${o.name}</td><td>${ob}</td></tr>`;
                              }).join('');
                              optHtml = `
@@ -1559,20 +2008,21 @@
                  } else {
                      if (panel) panel.innerHTML = `
                          <div class="alert alert-danger mt-3">
-                             <strong>❌ Sync Failed:</strong> ${data.message || 'Unknown error'}
+                             <strong>Sync Failed:</strong> ${data.message || 'Unknown error'}
                          </div>`;
                  }
              } catch (err) {
                  console.error(err);
-                 if (panel) panel.innerHTML = `<div class="alert alert-danger mt-3">❌ Connection Error: ${err.message}</div>`;
+                 if (panel) panel.innerHTML = `<div class="alert alert-danger mt-3">Connection Error: ${err.message}</div>`;
              } finally {
                  btn.disabled = false;
                  btn.innerHTML = originalText;
              }
          }
 
-         // ---- Sync Customers / Vendors → Zoho Contacts ----
+         // ---- Sync Customers / Vendors  Zoho Contacts ----
          async function syncContacts(type) {
+             
              const btnId = type === 'customer' ? 'btnSyncCustomers' : 'btnSyncVendors';
              const endpoint = type === 'customer' ? '/api/ledgers/sync_customers' : '/api/ledgers/sync_vendors';
              const label = type === 'customer' ? 'Customers' : 'Vendors';
@@ -1605,11 +2055,11 @@
                      const s = data.stats;
                      const failed = data.failed_contacts || [];
 
-                     // ── Summary bar ──────────────────────────────────────
+                     //  Summary bar 
                      const alertClass = s.failed > 0 ? 'alert-warning' : 'alert-success';
                      let html = `
                          <div class="alert ${alertClass} border-0 shadow-sm mt-2">
-                             <div class="fw-bold mb-2">${s.failed > 0 ? '⚠️' : '✅'} ${label} Sync Complete</div>
+                             <div class="fw-bold mb-2">${s.failed > 0 ? '' : ''} ${label} Sync Complete</div>
                              <div class="d-flex gap-4 flex-wrap">
                                  <span><strong class="text-success">${s.created}</strong> Created</span>
                                  <span><strong class="text-primary">${s.updated}</strong> Updated</span>
@@ -1618,7 +2068,7 @@
                              </div>
                          </div>`;
 
-                     // ── Failed contacts panel (always visible, not collapsed) ──
+                     //  Failed contacts panel (always visible, not collapsed) 
                      if (failed.length > 0) {
                          const rows = failed.map((f, i) => `
                              <tr>
@@ -1634,7 +2084,7 @@
                          html += `
                              <div class="card border-danger shadow-sm mt-2">
                                  <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
-                                     <span>❌ Failed ${label} — ${failed.length} error(s)</span>
+                                     <span>Failed ${label}  ${failed.length} error(s)</span>
                                      <span class="badge bg-white text-danger small">Review &amp; fix in Tally or Zoho</span>
                                  </div>
                                  <div class="card-body p-0">
@@ -1652,7 +2102,7 @@
                                      </div>
                                  </div>
                                  <div class="card-footer bg-light text-muted small">
-                                     💡 Common fix: Check if this contact already exists in Zoho with a different name, or if the name has special characters.
+                                      Common fix: Check if this contact already exists in Zoho with a different name, or if the name has special characters.
                                  </div>
                              </div>`;
                      }
@@ -1662,12 +2112,12 @@
                  } else {
                      resultDiv.innerHTML = `
                          <div class="alert alert-danger mt-2">
-                             <strong>❌ Sync Failed:</strong> ${data.message || 'Unknown error'}
+                             <strong>Sync Failed:</strong> ${data.message || 'Unknown error'}
                          </div>`;
                  }
              } catch (err) {
                  console.error(err);
-                 resultDiv.innerHTML = `<div class="alert alert-danger mt-2">❌ Connection Error: ${err.message}</div>`;
+                 resultDiv.innerHTML = `<div class="alert alert-danger mt-2">Connection Error: ${err.message}</div>`;
              } finally {
                  btn.disabled = false;
                  btn.innerHTML = originalText;
@@ -1677,3 +2127,5 @@
     </script>
 </body>
 </html>
+
+

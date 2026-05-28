@@ -59,11 +59,11 @@ def fetch_groups_from_tally():
                 "parent": extract_field(block, "PARENT")
             })
 
-        print(f"✅ Groups fetched: {len(groups)}")
+        print(f" Groups fetched: {len(groups)}")
         return groups
 
     except Exception as e:
-        print("❌ Error fetching groups:", e)
+        print(" Error fetching groups:", e)
         return []
 
 
@@ -88,7 +88,7 @@ def fetch_ledgers_from_tally():
 </ENVELOPE>"""
 
     try:
-        print("📡 Connecting to Tally on port 9000...")
+        print(" Connecting to Tally on port 9000...")
         response = requests.post(
             "http://localhost:9000",
             data=xml_request.encode("utf-8"),
@@ -140,11 +140,11 @@ def fetch_ledgers_from_tally():
                 "email": extract_field(ledger_block, "EMAIL"),
             })
 
-        print(f"✅ Ledgers fetched: {len(ledgers)}")
+        print(f" Ledgers fetched: {len(ledgers)}")
         return ledgers
 
     except Exception as e:
-        print("❌ Error fetching ledgers:", e)
+        print(" Error fetching ledgers:", e)
         return []
 
 
@@ -230,35 +230,35 @@ def search_ledger(query, ledgers):
     matches = [l for l in ledgers if query in l["name"].lower()]
 
     if not matches:
-        print(f"\n❌ No ledger found for '{query}'")
+        print(f"\n No ledger found for '{query}'")
         return
 
-    print(f"\n🔎 Found {len(matches)} result(s) for '{query}':")
+    print(f"\n Found {len(matches)} result(s) for '{query}':")
 
     for l in matches:
         print("\n" + "="*80)
-        print(f"📌 NAME           : {l['name']}")
-        print(f"📁 UNDER GROUP    : {l['parent']}")
-        print(f"🏷️ LEDGER TYPE    : {l['type']}")
+        print(f" NAME           : {l['name']}")
+        print(f" UNDER GROUP    : {l['parent']}")
+        print(f"️ LEDGER TYPE    : {l['type']}")
 
-        print("📨 ADDRESS:")
+        print(" ADDRESS:")
         for line in l["address_lines"]:
             print(f"   {line}")
 
-        print(f"🌍 STATE          : {l.get('state','')}")
-        print(f"🌏 COUNTRY        : {l.get('country','')}")
-        print(f"📮 PINCODE        : {l.get('pincode','')}")
-        print(f"🆔 PAN            : {l.get('pan','')}")
-        print(f"🔢 GSTIN          : {l.get('gstin','')}")
-        print(f"🧾 GST REG TYPE   : {l.get('gst_reg_type','')}")
+        print(f" STATE          : {l.get('state','')}")
+        print(f" COUNTRY        : {l.get('country','')}")
+        print(f" PINCODE        : {l.get('pincode','')}")
+        print(f" PAN            : {l.get('pan','')}")
+        print(f" GSTIN          : {l.get('gstin','')}")
+        print(f" GST REG TYPE   : {l.get('gst_reg_type','')}")
 
         opening = l.get("opening_balance", "")
         if not opening:
-            print("💰 OPENING BAL    : ❌ No opening balance in Tally")
+            print(" OPENING BAL    :  No opening balance in Tally")
         else:
-            print(f"💰 OPENING BAL    : {opening}")
+            print(f" OPENING BAL    : {opening}")
 
-        print(f"💰 CLOSING BAL    : {l.get('closing_balance','')}")
+        print(f" CLOSING BAL    : {l.get('closing_balance','')}")
         print("="*80)
 
 
@@ -268,32 +268,32 @@ def search_ledger(query, ledgers):
 
 if __name__ == "__main__":
 
-    print("🚀 TALLY LEDGER ANALYSIS + SEARCH TOOL")
+    print(" TALLY LEDGER ANALYSIS + SEARCH TOOL")
     print("="*80)
 
-    print("\n📂 Fetching Groups...")
+    print("\n Fetching Groups...")
     groups = fetch_groups_from_tally()
 
-    print("\n📋 Fetching Ledgers...")
+    print("\n Fetching Ledgers...")
     ledgers = fetch_ledgers_from_tally()
 
     if not ledgers:
-        print("❌ No ledgers fetched from Tally.")
+        print(" No ledgers fetched from Tally.")
         exit()
 
-    print("\n🔍 Analyzing Ledger Hierarchy...")
+    print("\n Analyzing Ledger Hierarchy...")
     analysis = analyze_ledgers(ledgers, groups)
 
-    print("\n🎯 SUMMARY")
+    print("\n SUMMARY")
     print(f"   Customers : {len(analysis['sundry_debtors'])}")
     print(f"   Vendors   : {len(analysis['sundry_creditors'])}")
     print(f"   Others    : {len(analysis['other_ledgers'])}")
 
     # SEARCH LOOP
     while True:
-        query = input("\n🔍 Enter Ledger/Customer/Vendor to search (or EXIT): ")
+        query = input("\n Enter Ledger/Customer/Vendor to search (or EXIT): ")
         if query.lower() == "exit":
-            print("👋 Exiting tool.")
+            print(" Exiting tool.")
             break
 
         search_ledger(query, analysis["ledgers"])

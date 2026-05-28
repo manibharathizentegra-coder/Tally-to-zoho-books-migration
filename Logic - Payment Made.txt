@@ -1,0 +1,85 @@
+========================================================================
+[ PHASE 1: INITIALIZATION & ROUTING ]
+========================================================================
+[ START: Read Payment Made from SQLite DB ]
+       |
+[ Load 'Purchase_Bill_Master' & 'Migration_Cutoff_Date' into Memory ]
+       |
+       v
+[ LOOP: For EACH Adjustment Line in the Payment Made ]
+       |
+       v
+[ Identify Adjustment Type ]
+       |
+       +---> IF 'Advance' / 'On Account'
+       |         |--> IF 'Dr' -> [ Route to Vendor Advance Array ] Else 'Cr' [Error ]
+       |
+       +---> IF 'Agst Ref'
+       |         |--> IF 'Dr' -> [ Route to Bill Payment Array ] Else 'Cr' [Error ]
+       |
+       +---> IF 'New Ref'
+                 |
+                 +---> IF 'Dr'
+                 |         |
+                 |         [ Lookup: Does Ref Exist in Purchase Bill Master? ]
+                 |         |
+                 |         +---> YES -> [ Route to Bill Payment Array ]
+                 |         |
+                 |         +---> NO  -> [ Route to Vendor Advance Array ]
+                 |
+                 +---> Else 'Cr' [Error ]
+
+
+========================================================================
+[ PHASE 2: PROCESSING BILL PAYMENTS (The Date Split & Summing) ]
+========================================================================
+       |
+[ Check Bill Payment Array for this Payment ]
+       |
+[ LOOP: For Each Bill in Array ]
+       |
+       +---> [ Lookup Bill Date in DB ]
+       |
+       +---> IF Date <= Migration Cutoff (Previous Year)
+       |         |--> Action: Add to "Previous Year Sum" 
+       |         |--> Action: Map to Historical/Opening Balance Bill ID
+       |
+       +---> IF Date > Migration Cutoff (Current Year)
+                 |--> Action: Add to "Current Year Sum"
+                 |--> Action: Map to exact Current Zoho Bill ID
+
+========================================================================
+[ PHASE 3: API BUILDERS (Executing the Data) ]
+========================================================================
+
+[ BUILD VENDOR PAYMENT API PAYLOAD ] 
+(https://books.zoho.in/app/60029735624#/paymentsmade/new)
+   -> vendor_id         = Lookup(Vendor_Name)
+   -> date              = Payment_Date
+   -> account_id        = Lookup(Bank_Name - e.g., SBI)
+   -> reference_number  = Payment_No
+   -> amount            = (Previous Year Sum + Current Year Sum)
+   -> bills [           = (Array containing the mapped bill IDs and amounts)
+          { bill_id: X, amount_applied: Y },
+          { bill_id: Z, amount_applied: W }
+      ]
+       |
+       v
+[ POST Request to Zoho Books Vendor Payment API (/vendorpayments) ]
+
+
+[ BUILD VENDOR ADVANCE API PAYLOAD ] (If any advances exist)
+(https://books.zoho.in/app/60029735624#/paymentsmade/new?transaction_type=vendor_advance)
+   -> vendor_id         = Lookup(Vendor_Name)
+   -> amount            = Line_Item_Amount
+   -> date              = Payment_Date
+   -> account_id        = Lookup(Bank_Name)
+   -> reference_number  = Adjustment_Ref_No
+   -> description       = Narration
+   -> transaction_type  = "vendor_advance"  <-- Required for Zoho
+       |
+       v
+[ POST Request to Zoho Books Vendor Advance API (/vendorpayments) ]
+
+[ MOVE TO NEXT PAYMENT IN DATABASE ]
+========================================================================

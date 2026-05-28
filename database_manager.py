@@ -1,39 +1,62 @@
 import sqlite3
 import os
 import atexit
+import contextvars
 
-DB_NAME = "tally_data.db"
+DEFAULT_DB_NAME = "tally_data.db"
+_DB_NAME_VAR = contextvars.ContextVar("db_name", default=DEFAULT_DB_NAME)
 
-_WRITE_CONN = None
+_WRITE_CONN = {}  # db_name -> sqlite3.Connection
 
 def close_write_connection():
     global _WRITE_CONN
-    if _WRITE_CONN:
-        _WRITE_CONN.close()
-        _WRITE_CONN = None
+    for conn in list(_WRITE_CONN.values()):
+        try:
+            conn.close()
+        except Exception:
+            pass
+    _WRITE_CONN = {}
 
 atexit.register(close_write_connection)
 
-def get_db_connection(write=False):
+def set_active_db(db_name: str):
+    """
+    Set the active DB for the current context (request/session).
+    db_name should be a filename like 'tally_data.db' (no directories).
+    """
+    if not db_name:
+        db_name = DEFAULT_DB_NAME
+    _DB_NAME_VAR.set(db_name)
+
+def get_active_db() -> str:
+    return _DB_NAME_VAR.get()
+
+def get_db_connection(write=False, db_name=None):
     global _WRITE_CONN
+    if db_name:
+        set_active_db(db_name)
+
+    db_to_use = get_active_db()
 
     if write:
-        if _WRITE_CONN is None:
-            _WRITE_CONN = sqlite3.connect(
-                DB_NAME,
+        if db_to_use not in _WRITE_CONN or _WRITE_CONN[db_to_use] is None:
+            _WRITE_CONN[db_to_use] = sqlite3.connect(
+                db_to_use,
                 timeout=60,
                 isolation_level=None,  # autocommit
                 check_same_thread=False
             )
-            _WRITE_CONN.row_factory = sqlite3.Row
-        return _WRITE_CONN
+            _WRITE_CONN[db_to_use].row_factory = sqlite3.Row
+        return _WRITE_CONN[db_to_use]
 
-    conn = sqlite3.connect(DB_NAME, timeout=30)
+    conn = sqlite3.connect(db_to_use, timeout=30)
     conn.row_factory = sqlite3.Row
     return conn
 
 
-def init_db():
+def init_db(db_name=None):
+    if db_name:
+        set_active_db(db_name)
     conn = get_db_connection()
     cursor = conn.cursor()
     
@@ -48,6 +71,27 @@ def init_db():
             name TEXT UNIQUE,
             parent TEXT,
             primary_group TEXT
+        )
+    ''')
+
+    # ZOHO ITEM SYNC MAP (for fast resume / delta sync)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS zoho_item_sync (
+            item_name TEXT PRIMARY KEY,
+            zoho_item_id TEXT,
+            signature TEXT,
+            last_synced_at TEXT
+        )
+    ''')
+
+    # INVENTORY ADJUSTMENT APPLY RESUME (run_id -> applied Zoho item_ids)
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS inv_adj_applied (
+            run_id TEXT,
+            item_id TEXT,
+            item_name TEXT,
+            applied_at TEXT,
+            PRIMARY KEY (run_id, item_id)
         )
     ''')
     
@@ -168,6 +212,13 @@ def init_db():
             updated_at TEXT
         )
     ''')
+
+    # Prefer tally_guid as the durable unique key (receipt_number can change across exports).
+    # Partial unique index allows multiple empty GUIDs.
+    try:
+        cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_receipts_tally_guid ON receipts(tally_guid) WHERE tally_guid != ''")
+    except Exception:
+        pass
     
     # PAYMENTS MADE
     cursor.execute('''
@@ -472,9 +523,94 @@ def init_db():
     ''')
     cursor.execute('CREATE INDEX IF NOT EXISTS idx_contra_date ON contra_vouchers(date)')
 
+    # CREDIT NOTES TABLE
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS credit_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            -- Voucher identity
+            credit_note_number TEXT UNIQUE,
+            voucher_type      TEXT,
+            date              TEXT,
+
+            -- Account details
+            from_account      TEXT,
+            to_account        TEXT,
+            amount            REAL DEFAULT 0,
+            narration         TEXT,
+
+            -- Ledger entries JSON (snapshot of all entries)
+            ledger_entries    TEXT,
+
+            -- Line items detail stored as JSON array.
+            -- Each element: { item_name, quantity, rate, amount }
+            line_items        TEXT,
+
+            -- Cost center allocations JSON
+            cost_center_allocations TEXT,
+
+            -- Tally ID mapping
+            tally_guid        TEXT,
+            company_name      TEXT,
+
+            -- Timestamps
+            created_at        TEXT,
+            updated_at        TEXT
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_credit_note_date ON credit_notes(date)')
+
+    # DEBIT NOTES TABLE
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS debit_notes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+
+            -- Voucher identity
+            debit_note_number TEXT UNIQUE,
+            voucher_type      TEXT,
+            date              TEXT,
+
+            -- Account details
+            from_account      TEXT,
+            to_account        TEXT,
+            amount            REAL DEFAULT 0,
+            narration         TEXT,
+
+            -- Ledger entries JSON (snapshot of all entries)
+            ledger_entries    TEXT,
+
+            -- Line items detail stored as JSON array.
+            -- Each element: { item_name, quantity, rate, amount }
+            line_items        TEXT,
+
+            -- Cost center allocations JSON
+            cost_center_allocations TEXT,
+
+            -- Tally ID mapping
+            tally_guid        TEXT,
+            company_name      TEXT,
+
+            -- Timestamps
+            created_at        TEXT,
+            updated_at        TEXT
+        )
+    ''')
+    cursor.execute('CREATE INDEX IF NOT EXISTS idx_debit_note_date ON debit_notes(date)')
+
+    # ZOHO TOKENS TABLE
+    cursor.execute('''
+        CREATE TABLE IF NOT EXISTS zoho_tokens (
+            id INTEGER PRIMARY KEY DEFAULT 1,
+            access_token TEXT,
+            refresh_token TEXT,
+            expiry_time TEXT,
+            organization_id TEXT
+        )
+    ''')
+
     conn.commit()
     conn.close()
-    print(f"✅ Database initialized: {DB_NAME}")
+    print(f" Database initialized: {get_active_db()}")
 
 # ---------------------------------------------------
 # INSERTS / UPDATES
@@ -531,7 +667,7 @@ def get_all_contra():
         ''')
         return cursor.fetchall()
     except Exception as e:
-        print(f"❌ Error getting all contra vouchers from DB: {e}")
+        print(f" Error getting all contra vouchers from DB: {e}")
         return []
 
 def get_contra_by_number(contra_number):
@@ -541,8 +677,9 @@ def get_contra_by_number(contra_number):
         cursor.execute('SELECT * FROM contra_vouchers WHERE contra_number = ?', (contra_number,))
         return cursor.fetchone()
     except Exception as e:
-        print(f"❌ Error getting contra {contra_number} from DB: {e}")
+        print(f" Error getting contra {contra_number} from DB: {e}")
         return None
+
 
 def insert_or_update_ledger(data):
     conn = get_db_connection(write=True)
@@ -637,6 +774,86 @@ def get_all_items():
     items = conn.execute('SELECT * FROM items').fetchall()
     conn.close()
     return [dict(ix) for ix in items]
+
+def upsert_zoho_item_sync(item_name: str, zoho_item_id: str, signature: str = ""):
+    if not item_name or not zoho_item_id:
+        return
+    conn = get_db_connection(write=True)
+    cursor = conn.cursor()
+    try:
+        cursor.execute('''
+            INSERT INTO zoho_item_sync (item_name, zoho_item_id, signature, last_synced_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(item_name) DO UPDATE SET
+                zoho_item_id=excluded.zoho_item_id,
+                signature=excluded.signature,
+                last_synced_at=excluded.last_synced_at
+        ''', (item_name, zoho_item_id, signature or ""))
+        conn.commit()
+    except Exception as e:
+        print(f"Error saving zoho item sync for {item_name}: {e}")
+
+def get_zoho_item_sync_map():
+    """
+    Returns: dict lower(item_name) -> {"item_name": str, "zoho_item_id": str, "signature": str}
+    """
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    out = {}
+    try:
+        rows = cursor.execute('SELECT item_name, zoho_item_id, signature FROM zoho_item_sync').fetchall()
+        for r in rows:
+            nm = (r[0] or "").strip()
+            if not nm:
+                continue
+            out[nm.lower()] = {
+                "item_name": nm,
+                "zoho_item_id": (r[1] or "").strip(),
+                "signature": (r[2] or "").strip(),
+            }
+    except Exception:
+        pass
+    finally:
+        conn.close()
+    return out
+
+
+def get_inv_adj_applied_ids(run_id: str):
+    if not run_id:
+        return set()
+    conn = get_db_connection()
+    cursor = conn.cursor()
+    try:
+        rows = cursor.execute(
+            "SELECT item_id FROM inv_adj_applied WHERE run_id = ?",
+            (run_id,)
+        ).fetchall()
+        return {str(r[0]) for r in rows if r and r[0]}
+    except Exception:
+        return set()
+    finally:
+        conn.close()
+
+
+def mark_inv_adj_applied(run_id: str, item_id: str, item_name: str = ""):
+    if not run_id or not item_id:
+        return
+    conn = get_db_connection(write=True)
+    cursor = conn.cursor()
+    try:
+        cursor.execute(
+            '''
+            INSERT INTO inv_adj_applied (run_id, item_id, item_name, applied_at)
+            VALUES (?, ?, ?, datetime('now'))
+            ON CONFLICT(run_id, item_id) DO UPDATE SET
+                item_name=excluded.item_name,
+                applied_at=excluded.applied_at
+            ''',
+            (run_id, item_id, item_name or "")
+        )
+        conn.commit()
+    except Exception as e:
+        print(f"Error marking inv adj applied for {item_id}: {e}")
 
 
 def get_ledger_by_name(name):
@@ -847,6 +1064,180 @@ def bulk_save_receipts(receipts_data):
         ''',
         receipts_data
     )
+    conn.commit()
+
+
+def bulk_save_receipts_by_guid(receipts_data):
+    """
+    Upsert receipts using tally_guid when available (preferred),
+    otherwise falls back to receipt_number-based upsert.
+    """
+    if not receipts_data:
+        return
+
+    with_guid = []
+    without_guid = []
+
+    for r in receipts_data:
+        guid = str((r or {}).get("tally_guid") or "").strip()
+        if guid:
+            with_guid.append(r)
+        else:
+            without_guid.append(r)
+
+    conn = get_db_connection(write=True)
+    cursor = conn.cursor()
+
+    if with_guid:
+        try:
+            cursor.execute("CREATE UNIQUE INDEX IF NOT EXISTS idx_receipts_tally_guid ON receipts(tally_guid) WHERE tally_guid != ''")
+        except Exception:
+            pass
+
+        cursor.executemany(
+            '''
+            INSERT INTO receipts (
+                receipt_number,
+                voucher_type,
+                date,
+                customer_name,
+                customer_ledger_amount,
+                payment_mode,
+                bank_account,
+                account_current_balance,
+                amount,
+                reference_number,
+                against_reference,
+                narration,
+                invoice_allocations,
+                ledger_entries,
+                cost_center_allocations,
+                rounding_amount,
+                rounding_ledger,
+                tally_guid,
+                company_name,
+                created_at,
+                updated_at
+            ) VALUES (
+                :receipt_number,
+                :voucher_type,
+                :date,
+                :customer_name,
+                :customer_ledger_amount,
+                :payment_mode,
+                :bank_account,
+                :account_current_balance,
+                :amount,
+                :reference_number,
+                :against_reference,
+                :narration,
+                :invoice_allocations,
+                :ledger_entries,
+                :cost_center_allocations,
+                :rounding_amount,
+                :rounding_ledger,
+                :tally_guid,
+                :company_name,
+                :created_at,
+                :updated_at
+            )
+            ON CONFLICT(tally_guid) DO UPDATE SET
+                receipt_number = excluded.receipt_number,
+                voucher_type = excluded.voucher_type,
+                date = excluded.date,
+                customer_name = excluded.customer_name,
+                customer_ledger_amount = excluded.customer_ledger_amount,
+                payment_mode = excluded.payment_mode,
+                bank_account = excluded.bank_account,
+                account_current_balance = excluded.account_current_balance,
+                amount = excluded.amount,
+                reference_number = excluded.reference_number,
+                against_reference = excluded.against_reference,
+                narration = excluded.narration,
+                invoice_allocations = excluded.invoice_allocations,
+                ledger_entries = excluded.ledger_entries,
+                cost_center_allocations = excluded.cost_center_allocations,
+                rounding_amount = excluded.rounding_amount,
+                rounding_ledger = excluded.rounding_ledger,
+                company_name = excluded.company_name,
+                updated_at = excluded.updated_at
+            ''',
+            with_guid
+        )
+
+    if without_guid:
+        cursor.executemany(
+            '''
+            INSERT INTO receipts (
+                receipt_number,
+                voucher_type,
+                date,
+                customer_name,
+                customer_ledger_amount,
+                payment_mode,
+                bank_account,
+                account_current_balance,
+                amount,
+                reference_number,
+                against_reference,
+                narration,
+                invoice_allocations,
+                ledger_entries,
+                cost_center_allocations,
+                rounding_amount,
+                rounding_ledger,
+                tally_guid,
+                company_name,
+                created_at,
+                updated_at
+            ) VALUES (
+                :receipt_number,
+                :voucher_type,
+                :date,
+                :customer_name,
+                :customer_ledger_amount,
+                :payment_mode,
+                :bank_account,
+                :account_current_balance,
+                :amount,
+                :reference_number,
+                :against_reference,
+                :narration,
+                :invoice_allocations,
+                :ledger_entries,
+                :cost_center_allocations,
+                :rounding_amount,
+                :rounding_ledger,
+                :tally_guid,
+                :company_name,
+                :created_at,
+                :updated_at
+            )
+            ON CONFLICT(receipt_number) DO UPDATE SET
+                voucher_type = excluded.voucher_type,
+                date = excluded.date,
+                customer_name = excluded.customer_name,
+                customer_ledger_amount = excluded.customer_ledger_amount,
+                payment_mode = excluded.payment_mode,
+                bank_account = excluded.bank_account,
+                account_current_balance = excluded.account_current_balance,
+                amount = excluded.amount,
+                reference_number = excluded.reference_number,
+                against_reference = excluded.against_reference,
+                narration = excluded.narration,
+                invoice_allocations = excluded.invoice_allocations,
+                ledger_entries = excluded.ledger_entries,
+                cost_center_allocations = excluded.cost_center_allocations,
+                rounding_amount = excluded.rounding_amount,
+                rounding_ledger = excluded.rounding_ledger,
+                tally_guid = excluded.tally_guid,
+                company_name = excluded.company_name,
+                updated_at = excluded.updated_at
+            ''',
+            without_guid
+        )
+
+    conn.commit()
 
 
 def get_all_receipts():
@@ -944,7 +1335,7 @@ def bulk_save_journals(journals_data):
         journals_data
     )
     conn.commit()
-    print(f"   💾 bulk_save_journals: saved {len(journals_data)} journals to DB")
+    print(f"    bulk_save_journals: saved {len(journals_data)} journals to DB")
 
 
 def get_all_journals():
@@ -1039,7 +1430,7 @@ def bulk_save_invoices(invoices_data):
         invoices_data
     )
     conn.commit()
-    print(f"   💾 bulk_save_invoices: saved {len(invoices_data)} invoices to DB")
+    print(f"    bulk_save_invoices: saved {len(invoices_data)} invoices to DB")
 
 
 def get_all_invoices():
@@ -1129,7 +1520,7 @@ def bulk_save_bills(bills_data):
         bills_data
     )
     conn.commit()
-    print(f"   💾 bulk_save_bills: saved {len(bills_data)} bills to DB")
+    print(f"    bulk_save_bills: saved {len(bills_data)} bills to DB")
 
 
 def get_all_bills():
@@ -1218,7 +1609,7 @@ def bulk_save_sales_orders(orders_data):
         orders_data
     )
     conn.commit()
-    print(f"   💾 bulk_save_sales_orders: saved {len(orders_data)} sales orders to DB")
+    print(f"    bulk_save_sales_orders: saved {len(orders_data)} sales orders to DB")
 
 
 def get_all_sales_orders():
@@ -1307,7 +1698,7 @@ def bulk_save_purchase_orders(orders_data):
         orders_data
     )
     conn.commit()
-    print(f"   💾 bulk_save_purchase_orders: saved {len(orders_data)} purchase orders to DB")
+    print(f"    bulk_save_purchase_orders: saved {len(orders_data)} purchase orders to DB")
 
 
 def get_all_purchase_orders():
@@ -1387,3 +1778,101 @@ def get_all_payments_made():
     rows = conn.execute('SELECT * FROM payments_made ORDER BY date DESC').fetchall()
     conn.close()
     return [dict(r) for r in rows]
+
+
+def get_expense_ledgers():
+    """Identify expense ledgers more reliably by checking both type and parent group keywords."""
+    conn = get_db_connection()
+    # Check for 'other' type or parents containing 'Expense' or 'Purchase'
+    query = """
+        SELECT name FROM ledgers 
+        WHERE LOWER(type) IN ('other', 'others')
+           OR LOWER(parent) LIKE '%expense%'
+           OR LOWER(parent) LIKE '%purchase%'
+           OR LOWER(parent) LIKE '%cost of sales%'
+    """
+    rows = conn.execute(query).fetchall()
+    conn.close()
+    return [r['name'].strip().lower() for r in rows if r['name']]
+
+# ---------------------------------------------------
+# CREDIT NOTES FUNCTIONS
+# ---------------------------------------------------
+
+def bulk_save_credit_notes(credit_notes_data):
+    if not credit_notes_data:
+        return
+    conn = get_db_connection(write=True)
+    cursor = conn.cursor()
+    cursor.executemany('''
+        INSERT INTO credit_notes (
+            credit_note_number, voucher_type, date, from_account, to_account, amount,
+            narration, ledger_entries, line_items, cost_center_allocations, tally_guid, company_name, created_at, updated_at
+        ) VALUES (
+            :credit_note_number, :voucher_type, :date, :from_account, :to_account, :amount,
+            :narration, :ledger_entries, :line_items, :cost_center_allocations, :tally_guid, :company_name, :created_at, :updated_at
+        ) ON CONFLICT(credit_note_number) DO UPDATE SET
+            date = excluded.date,
+            from_account = excluded.from_account,
+            to_account = excluded.to_account,
+            amount = excluded.amount,
+            narration = excluded.narration,
+            ledger_entries = excluded.ledger_entries,
+            line_items = excluded.line_items,
+            cost_center_allocations = excluded.cost_center_allocations,
+            updated_at = excluded.updated_at
+    ''', credit_notes_data)
+    conn.commit()
+
+def get_all_credit_notes():
+    conn = get_db_connection()
+    rows = conn.execute('SELECT * FROM credit_notes ORDER BY date DESC').fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+# ---------------------------------------------------
+# DEBIT NOTES FUNCTIONS
+# ---------------------------------------------------
+
+def bulk_save_debit_notes(debit_notes_data):
+    if not debit_notes_data:
+        return
+    conn = get_db_connection(write=True)
+    cursor = conn.cursor()
+    cursor.executemany('''
+        INSERT INTO debit_notes (
+            debit_note_number, voucher_type, date, from_account, to_account, amount,
+            narration, ledger_entries, line_items, cost_center_allocations, tally_guid, company_name, created_at, updated_at
+        ) VALUES (
+            :debit_note_number, :voucher_type, :date, :from_account, :to_account, :amount,
+            :narration, :ledger_entries, :line_items, :cost_center_allocations, :tally_guid, :company_name, :created_at, :updated_at
+        ) ON CONFLICT(debit_note_number) DO UPDATE SET
+            date = excluded.date,
+            from_account = excluded.from_account,
+            to_account = excluded.to_account,
+            amount = excluded.amount,
+            narration = excluded.narration,
+            ledger_entries = excluded.ledger_entries,
+            line_items = excluded.line_items,
+            cost_center_allocations = excluded.cost_center_allocations,
+            updated_at = excluded.updated_at
+    ''', debit_notes_data)
+    conn.commit()
+
+def get_all_debit_notes():
+    conn = get_db_connection()
+    rows = conn.execute('SELECT * FROM debit_notes ORDER BY date DESC').fetchall()
+    conn.close()
+    return [dict(r) for r in rows]
+
+def get_credit_note_by_number(credit_note_number):
+    conn = get_db_connection()
+    row = conn.execute('SELECT * FROM credit_notes WHERE credit_note_number = ?', (credit_note_number,)).fetchone()
+    conn.close()
+    return dict(row) if row else None
+
+def get_debit_note_by_number(debit_note_number):
+    conn = get_db_connection()
+    row = conn.execute('SELECT * FROM debit_notes WHERE debit_note_number = ?', (debit_note_number,)).fetchone()
+    conn.close()
+    return dict(row) if row else None

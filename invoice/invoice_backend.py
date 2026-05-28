@@ -15,7 +15,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 try:
     import database_manager
 except ImportError:
-    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    print("️ Warning: Could not import database_manager. SQLite sync will be skipped.")
     database_manager = None
 
 # Import shared cache functions from journel module
@@ -56,7 +56,7 @@ def fetch_tally_invoices(from_date="20250401", to_date="20250430", limit=None):
     </STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"""
 
     try:
-        print(f"📥 Fetching invoices from Tally ({from_date} to {to_date})...")
+        print(f" Fetching invoices from Tally ({from_date} to {to_date})...")
         response = requests.post(TALLY_URL, data=xml_request, timeout=90)
         soup = BeautifulSoup(response.content, 'lxml-xml')
         
@@ -240,11 +240,11 @@ def fetch_tally_invoices(from_date="20250401", to_date="20250430", limit=None):
                 "total_amount": round(total_amount, 2)
             })
         
-        print(f"✅ Fetched {len(invoice_data)} invoice(s)")
+        print(f" Fetched {len(invoice_data)} invoice(s)")
         return invoice_data
     
     except Exception as e:
-        print(f"❌ Error fetching Tally invoices: {e}")
+        print(f" Error fetching Tally invoices: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -292,7 +292,7 @@ def sync_invoices_to_zoho(selected_invoices=None, from_date="20250401", to_date=
     'Import Invoices', avoiding a second Tally XML request.
     """
     try:
-        print("🚀 Starting Zoho Sync (Invoices)...")
+        print(" Starting Zoho Sync (Invoices)...")
 
         # Get access token
         token = get_access_token()
@@ -300,9 +300,9 @@ def sync_invoices_to_zoho(selected_invoices=None, from_date="20250401", to_date=
             return {"status": "error", "message": "Failed to get access token"}
 
         # Force refresh contacts to get latest structure
-        print("   🔄 Refreshing contacts from Zoho Books...")
+        print("    Refreshing contacts from Zoho Books...")
         contact_map = get_zoho_contacts(token, use_cache=False, force_refresh=True)
-        print(f"   ✅ Loaded {len(contact_map)} contacts")
+        print(f"    Loaded {len(contact_map)} contacts")
 
         # ----------------------------------------------------------------
         # DETERMINE WHAT TO SYNC
@@ -312,7 +312,7 @@ def sync_invoices_to_zoho(selected_invoices=None, from_date="20250401", to_date=
             invoices_to_sync = selected_invoices
             if limit and len(invoices_to_sync) > limit:
                 invoices_to_sync = invoices_to_sync[:limit]
-            print(f"📊 Using {len(invoices_to_sync)} selected invoice(s) from frontend")
+            print(f" Using {len(invoices_to_sync)} selected invoice(s) from frontend")
 
         else:
             # 2. Try DB first (avoids second Tally port call)
@@ -331,17 +331,17 @@ def sync_invoices_to_zoho(selected_invoices=None, from_date="20250401", to_date=
                     invoices_to_sync = db_rows
                     if limit:
                         invoices_to_sync = invoices_to_sync[:limit]
-                    print(f"📊 Loaded {len(invoices_to_sync)} invoice(s) from DB (no Tally call needed)")
+                    print(f" Loaded {len(invoices_to_sync)} invoice(s) from DB (no Tally call needed)")
 
             # 3. Fallback: hit Tally port if DB was empty
             if not invoices_to_sync:
-                print("🔄 DB empty for range — fetching from Tally port as fallback...")
+                print(" DB empty for range — fetching from Tally port as fallback...")
                 invoices_to_sync = fetch_tally_invoices(from_date, to_date, limit)
 
         if not invoices_to_sync:
             return {"status": "error", "message": "No invoices to sync"}
 
-        print(f"📊 Syncing {len(invoices_to_sync)} invoice(s) to Zoho Books...")
+        print(f" Syncing {len(invoices_to_sync)} invoice(s) to Zoho Books...")
 
         stats = {"created": 0, "failed": 0, "errors": []}
 
@@ -349,7 +349,7 @@ def sync_invoices_to_zoho(selected_invoices=None, from_date="20250401", to_date=
             result = create_zoho_invoice(token, invoice, contact_map)
             if result["success"]:
                 stats["created"] += 1
-                print(f"✅ Synced Invoice #{invoice['invoice_number']}")
+                print(f" Synced Invoice #{invoice['invoice_number']}")
             else:
                 stats["failed"] += 1
                 stats["errors"].append({
@@ -357,12 +357,12 @@ def sync_invoices_to_zoho(selected_invoices=None, from_date="20250401", to_date=
                     "customer":       invoice['customer_name'],
                     "error":          result["error"]
                 })
-                print(f"❌ Failed Invoice #{invoice['invoice_number']}: {result['error']}")
+                print(f" Failed Invoice #{invoice['invoice_number']}: {result['error']}")
 
         return {"status": "success", "stats": stats}
 
     except Exception as e:
-        print(f"❌ Error in sync_invoices_to_zoho: {e}")
+        print(f" Error in sync_invoices_to_zoho: {e}")
         import traceback
         traceback.print_exc()
         return {"status": "error", "message": str(e)}
@@ -483,11 +483,11 @@ def create_zoho_invoice(token, invoice_data, contact_map):
     headers = {"Authorization": f"Zoho-oauthtoken {token}"}
     params = {
         "organization_id": ORGANIZATION_ID,
-        "ignore_auto_number_generation": "true"  # ✅ Use Tally invoice number
+        "ignore_auto_number_generation": "true"  #  Use Tally invoice number
     }
     
     print(f"\n{'='*80}")
-    print(f"📝 Processing Invoice #{invoice_data['invoice_number']} - Customer: {invoice_data['customer_name']}")
+    print(f" Processing Invoice #{invoice_data['invoice_number']} - Customer: {invoice_data['customer_name']}")
     print(f"{'='*80}")
     
     # Find or create customer
@@ -496,16 +496,16 @@ def create_zoho_invoice(token, invoice_data, contact_map):
     
     if not contact_info:
         error_msg = f"Failed to find/create customer: {customer_name}"
-        print(f"  ❌ {error_msg}")
+        print(f"   {error_msg}")
         return {"success": False, "error": error_msg}
     
-    print(f"  ✅ Customer: {contact_info.get('original_name', customer_name)}")
+    print(f"   Customer: {contact_info.get('original_name', customer_name)}")
 
     
     # Get payment terms, tags, and accounts
     payment_terms_map = get_zoho_payment_terms_list(token)
     tag_map = get_zoho_tags(token)
-    account_map = get_zoho_accounts(token)  # ✅ Fetch accounts for sales ledger mapping
+    account_map = get_zoho_accounts(token)  #  Fetch accounts for sales ledger mapping
     
     # Convert date format
     tally_date = invoice_data["date"]
@@ -516,9 +516,9 @@ def create_zoho_invoice(token, invoice_data, contact_map):
     if invoice_data.get("sales_ledger"):
         sales_account_id = account_map.get(invoice_data["sales_ledger"].lower())
         if sales_account_id:
-            print(f"  💰 Sales Account: {invoice_data['sales_ledger']}")
+            print(f"   Sales Account: {invoice_data['sales_ledger']}")
         else:
-            print(f"  ⚠️  Sales account '{invoice_data['sales_ledger']}' not found in Zoho")
+            print(f"  ️  Sales account '{invoice_data['sales_ledger']}' not found in Zoho")
     
     # Build line items with reporting tags and account
     zoho_line_items = []
@@ -550,9 +550,9 @@ def create_zoho_invoice(token, invoice_data, contact_map):
                     "tag_id": category_tag["tag_id"],
                     "tag_option_id": category_tag["tag_option_id"]
                 })
-                print(f"  🏷️  Category: {item['category']}")
+                print(f"  ️  Category: {item['category']}")
             else:
-                print(f"  ⚠️  Category '{item['category']}' not found in Zoho")
+                print(f"  ️  Category '{item['category']}' not found in Zoho")
         
         if item.get('cost_centre'):
             cc_tag = tag_map.get(item['cost_centre'].lower())
@@ -561,9 +561,9 @@ def create_zoho_invoice(token, invoice_data, contact_map):
                     "tag_id": cc_tag["tag_id"],
                     "tag_option_id": cc_tag["tag_option_id"]
                 })
-                print(f"  🏷️  Cost Centre: {item['cost_centre']}")
+                print(f"  ️  Cost Centre: {item['cost_centre']}")
             else:
-                print(f"  ⚠️  Cost Centre '{item['cost_centre']}' not found in Zoho")
+                print(f"  ️  Cost Centre '{item['cost_centre']}' not found in Zoho")
         
         if tags:
             line_item["tags"] = tags
@@ -573,8 +573,8 @@ def create_zoho_invoice(token, invoice_data, contact_map):
     # Build payload
     payload = {
         "customer_id": contact_info["contact_id"],
-        "invoice_number": invoice_data["invoice_number"],  # ✅ Use Tally invoice number
-        "reference_number": invoice_data.get("po_number", ""),  # ✅ Use PO number as reference
+        "invoice_number": invoice_data["invoice_number"],  #  Use Tally invoice number
+        "reference_number": invoice_data.get("po_number", ""),  #  Use PO number as reference
         "date": zoho_date,
         "line_items": zoho_line_items,
         "notes": invoice_data.get("narration", "")[:1000] if invoice_data.get("narration") else ""
@@ -588,21 +588,21 @@ def create_zoho_invoice(token, invoice_data, contact_map):
             numbers = re.findall(r'\d+', invoice_data["payment_terms"])
             if numbers:
                 payload["payment_terms"] = int(numbers[0])
-                print(f"  ✅ Payment Terms: {invoice_data['payment_terms']} -> {numbers[0]} days")
+                print(f"   Payment Terms: {invoice_data['payment_terms']} -> {numbers[0]} days")
         else:
-            print(f"  ⚠️  Payment term '{invoice_data['payment_terms']}' not found in Zoho")
+            print(f"  ️  Payment term '{invoice_data['payment_terms']}' not found in Zoho")
     
-    print(f"  📤 Creating invoice in Zoho Books...")
+    print(f"   Creating invoice in Zoho Books...")
     res = requests.post(f"{BASE_URL}/invoices", headers=headers, params=params, json=payload)
     
     if res.status_code in [200, 201] and res.json().get("code") == 0:
         invoice_id = res.json().get("invoice", {}).get("invoice_id", "N/A")
-        print(f"  ✅ SUCCESS! Invoice created with ID: {invoice_id}")
+        print(f"   SUCCESS! Invoice created with ID: {invoice_id}")
         return {"success": True, "invoice_id": invoice_id}
     else:
         error_data = res.json()
         error_msg = error_data.get("message", "Unknown error")
-        print(f"  ❌ FAILED! Status: {res.status_code}")
+        print(f"   FAILED! Status: {res.status_code}")
         print(f"  Response: {json.dumps(error_data, indent=2)}")
         return {"success": False, "error": f"{error_msg} (Code: {error_data.get('code', 'N/A')})"}
 
@@ -680,7 +680,7 @@ def get_all_invoices_data(from_date="20250401", to_date="20250430", limit=None):
 
             # Bulk-save to prevent 'database is locked' errors
             database_manager.bulk_save_invoices(db_data_list)
-            print(f"💾 Saved {len(invoices)} invoices to database")
+            print(f" Saved {len(invoices)} invoices to database")
 
         # ----------------------------------------------------------------
         # Build return stats
@@ -699,7 +699,128 @@ def get_all_invoices_data(from_date="20250401", to_date="20250430", limit=None):
         }
 
     except Exception as e:
-        print(f"❌ Error in get_all_invoices_data: {e}")
+        print(f" Error in get_all_invoices_data: {e}")
         import traceback
         traceback.print_exc()
         return None
+
+
+def parse_tally_json(json_path):
+    import json, re
+    try:
+        with open(json_path, 'r', encoding='utf-16') as f: data = json.load(f)
+    except:
+        with open(json_path, 'r', encoding='utf-8') as f: data = json.load(f)
+    if isinstance(data, list) and len(data) > 0 and 'date' in data[0]: return data
+    vouchers = data.get('tallymessage', [])
+    if isinstance(vouchers, dict): vouchers = [vouchers]
+    
+    invoice_data = []
+    for v in vouchers:
+        if not isinstance(v, dict): continue
+        if 'vouchernumber' not in v and 'vouchertypename' not in v: continue
+        
+        v_date = str(v.get('date', '')).strip()
+        v_no = str(v.get('vouchernumber', '')).strip()
+        customer_name = str(v.get('partyname', '')).strip()
+        narration = str(v.get('narration', '')).strip()
+        po_number = str(v.get('basicpurchaseorderno', '')).strip()
+        
+        buyer_address = []
+        basicbuyer = v.get('basicbuyeraddress.list', v.get('basicbuyeraddress', []))
+        if not isinstance(basicbuyer, list): basicbuyer = [basicbuyer]
+        for addr in basicbuyer:
+            if isinstance(addr, dict) and 'basicbuyeraddress' in addr:
+                buyer_address.append(str(addr['basicbuyeraddress']).strip())
+            elif isinstance(addr, str):
+                buyer_address.append(addr.strip())
+                
+        irn = str(v.get('irn', '')).strip()
+        irn_ack_no = str(v.get('irnackno', '')).strip()
+        irn_ack_date = str(v.get('irnackdate', '')).strip()
+        
+        payment_terms = str(v.get('basicduedateofpymt', '')).strip()
+        if not payment_terms:
+            bill_allocs = v.get('billallocations.list', v.get('billallocations', []))
+            if not isinstance(bill_allocs, list): bill_allocs = [bill_allocs]
+            for ba in bill_allocs:
+                if isinstance(ba, dict) and ba.get('billcreditperiod'):
+                    payment_terms = str(ba['billcreditperiod']).strip()
+                    break
+
+        sales_ledger = ""
+        inventory_entries = v.get('inventoryentries.list', v.get('inventoryentries', v.get('allinventoryentries.list', v.get('allinventoryentries', []))))
+        if not isinstance(inventory_entries, list): inventory_entries = [inventory_entries]
+        for item in inventory_entries:
+            if isinstance(item, dict) and item.get('ledgername'):
+                sales_ledger = str(item['ledgername']).strip()
+                break
+
+        ledger_entries = v.get('ledgerentries.list', v.get('ledgerentries', v.get('allledgerentries.list', v.get('allledgerentries', []))))
+        if not isinstance(ledger_entries, list): ledger_entries = [ledger_entries]
+        
+        if not sales_ledger:
+            max_neg = 0
+            for entry in ledger_entries:
+                if not isinstance(entry, dict): continue
+                lname = str(entry.get('ledgername', '')).strip()
+                amt_str = str(entry.get('amount', '0'))
+                nums = re.findall(r'[-\d.]+', amt_str)
+                amt = float(nums[-1]) if nums else 0.0
+                lname_lower = lname.lower()
+                if lname == customer_name or 'cgst' in lname_lower or 'sgst' in lname_lower or 'igst' in lname_lower or 'rounding' in lname_lower:
+                    continue
+                if amt < max_neg:
+                    max_neg = amt; sales_ledger = lname
+
+        line_items = []; subtotal = 0
+        for item in inventory_entries:
+            if not isinstance(item, dict): continue
+            item_name = str(item.get('stockitemname', '')).strip()
+            quantity = str(item.get('actualqty', item.get('billedqty', '0'))).strip()
+            
+            rate_str = str(item.get('rate', '0')).split('/')[0].strip()
+            nums = re.findall(r'[-\d.]+', rate_str)
+            rate = float(nums[-1]) if nums else 0.0
+            
+            discount = str(item.get('discount', '0')).strip()
+            
+            amt_str = str(item.get('amount', '0')).strip()
+            nums = re.findall(r'[-\d.]+', amt_str)
+            amount = float(nums[-1]) if nums else 0.0
+            
+            cat_alloc = item.get('categoryallocations.list', item.get('categoryallocations', {}))
+            if isinstance(cat_alloc, list) and len(cat_alloc) > 0: cat_alloc = cat_alloc[0]
+            category = str(cat_alloc.get('category', '')).strip() if isinstance(cat_alloc, dict) else ""
+            
+            cost_centre = ""
+            if isinstance(cat_alloc, dict):
+                cc_alloc = cat_alloc.get('costcentreallocations.list', cat_alloc.get('costcentreallocations', {}))
+                if isinstance(cc_alloc, list) and len(cc_alloc) > 0: cc_alloc = cc_alloc[0]
+                cost_centre = str(cc_alloc.get('name', '')).strip() if isinstance(cc_alloc, dict) else ""
+
+            line_items.append({"item_name": item_name, "quantity": quantity, "rate": rate, "discount": discount, "amount": abs(amount), "category": category, "cost_centre": cost_centre})
+            subtotal += abs(amount)
+
+        taxes = []; tax_total = 0; rounding_off = 0.0
+        for entry in ledger_entries:
+            if not isinstance(entry, dict): continue
+            lname = str(entry.get('ledgername', '')).strip()
+            amt_str = str(entry.get('amount', '0'))
+            nums = re.findall(r'[-\d.]+', amt_str)
+            amt = float(nums[-1]) if nums else 0.0
+            
+            lname_lower = lname.lower()
+            if ('cgst' in lname_lower or 'sgst' in lname_lower or 'igst' in lname_lower) and 'output' in lname_lower:
+                tax_rate = ""
+                if '%' in lname: tax_rate = lname.split('%')[0].split()[-1]
+                tax_type = "CGST" if 'cgst' in lname_lower else ("SGST" if 'sgst' in lname_lower else "IGST")
+                taxes.append({"tax_name": lname, "tax_type": tax_type, "tax_rate": tax_rate, "tax_amount": abs(amt)})
+                tax_total += abs(amt)
+            elif 'rounding' in lname_lower:
+                rounding_off = amt
+                
+        total_amount = subtotal + tax_total + rounding_off
+        invoice_data.append({"date": v_date, "invoice_number": v_no, "customer_name": customer_name, "po_number": po_number, "buyer_address": buyer_address, "payment_terms": payment_terms, "irn": irn, "irn_ack_no": irn_ack_no, "irn_ack_date": irn_ack_date, "sales_ledger": sales_ledger, "narration": narration, "line_items": line_items, "taxes": taxes, "rounding_off": rounding_off, "subtotal": round(subtotal, 2), "tax_total": round(tax_total, 2), "total_amount": round(total_amount, 2)})
+    return invoice_data
+

@@ -1,67 +1,81 @@
-from flask import Flask, jsonify, render_template, send_file, request
+from flask import Flask, jsonify, render_template, send_file, request, session, Response, stream_with_context
 from flask_cors import CORS
 import sys
 import os
 import json
+import os
+import re
+import time
+import io
+import threading
+
+UPLOAD_DIR = os.path.join(os.path.dirname(__file__), "uploads")
+os.makedirs(UPLOAD_DIR, exist_ok=True)
 
 # Add modules directory to path
 sys.path.append(os.path.dirname(__file__))
 
+try:
+    from modules.job_manager import jobs as job_manager, sse_format
+except Exception:
+    job_manager = None
+    sse_format = None
+
 # Import backend modules
 try:
     from ledgers import ledgers_backend as ledgers_module
-    print("✅ Successfully imported ledgers_text backend")
+    print(" Successfully imported ledgers_text backend")
 except ImportError as e:
-    print(f"❌ Error importing ledgers_backend: {e}")
+    print(f" Error importing ledgers_backend: {e}")
     ledgers_module = None
 
 try:
     from items import items_backend as items_module
-    print("✅ Successfully imported items_backend")
+    print(" Successfully imported items_backend")
 except ImportError as e:
-    print(f"❌ Error importing items_backend: {e}")
+    print(f" Error importing items_backend: {e}")
     items_module = None
 
 try:
     from journel import journel_backend as journel_module
-    print("✅ Successfully imported journel_backend")
+    print(" Successfully imported journel_backend")
 except ImportError as e:
-    print(f"❌ Error importing journel_backend: {e}")
+    print(f" Error importing journel_backend: {e}")
     journel_module = None
 
 try:
     from invoice import invoice_backend as invoice_module
-    print("✅ Successfully imported invoice_backend")
+    print(" Successfully imported invoice_backend")
 except ImportError as e:
-    print(f"❌ Error importing invoice_backend: {e}")
+    print(f" Error importing invoice_backend: {e}")
     invoice_module = None
 
 try:
     from bills import bills_backend as bills_module
-    print("✅ Successfully imported bills_backend")
+    print(" Successfully imported bills_backend")
 except ImportError as e:
-    print(f"❌ Error importing bills_backend: {e}")
+    print(f" Error importing bills_backend: {e}")
     bills_module = None
 
 try:
     from sales_order import sale_backend as sales_order_module
-    print("✅ Successfully imported sales_order_backend")
+    print(" Successfully imported sales_order_backend")
 except ImportError as e:
-    print(f"❌ Error importing sales_order_backend: {e}")
+    print(f" Error importing sales_order_backend: {e}")
     sales_order_module = None
 
 try:
     from purchase_order import purchase_order_backend as purchase_order_module
-    print("✅ Successfully imported purchase_order_backend")
+    print(" Successfully imported purchase_order_backend")
 except ImportError as e:
-    print(f"❌ Error importing purchase_order_backend: {e}")
+    print(f" Error importing purchase_order_backend: {e}")
     purchase_order_module = None
 
 try:
     from receipts import receipts_backend as receipts_module
-    print("✅ Successfully imported receipts_backend")
+    print(" Successfully imported receipts_backend")
 except ImportError as e:
-    print(f"❌ Error importing receipts_backend: {e}")
+    print(f" Error importing receipts_backend: {e}")
     receipts_module = None
 
 try:
@@ -70,29 +84,193 @@ try:
     spec = importlib.util.spec_from_file_location("payments_backend", os.path.join(os.path.dirname(__file__), 'Payments made', 'payments_backend.py'))
     payments_module = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(payments_module)
-    print("✅ Successfully imported payments_backend")
+    print(" Successfully imported payments_backend")
 except Exception as e:
-    print(f"❌ Error importing payments_backend: {e}")
+    print(f" Error importing payments_backend: {e}")
     payments_module = None
 
 try:
     spec_contra = importlib.util.spec_from_file_location("contra_backend", os.path.join(os.path.dirname(__file__), 'contra', 'contra_backend.py'))
     contra_module = importlib.util.module_from_spec(spec_contra)
     spec_contra.loader.exec_module(contra_module)
-    print("✅ Successfully imported contra_backend")
+    print(" Successfully imported contra_backend")
 except Exception as e:
-    print(f"❌ Error importing contra_backend: {e}")
+    print(f" Error importing contra_backend: {e}")
     contra_module = None
 
 try:
+    spec_credit_note = importlib.util.spec_from_file_location("credit_note_backend", os.path.join(os.path.dirname(__file__), 'credit_note', 'credit_note_backend.py'))
+    credit_note_module = importlib.util.module_from_spec(spec_credit_note)
+    spec_credit_note.loader.exec_module(credit_note_module)
+    print(" Successfully imported credit_note_backend")
+except Exception as e:
+    print(f" Error importing credit_note_backend: {e}")
+    credit_note_module = None
+
+try:
+    spec_debit_note = importlib.util.spec_from_file_location("debit_note_backend", os.path.join(os.path.dirname(__file__), 'debit_note', 'debit_note_backend.py'))
+    debit_note_module = importlib.util.module_from_spec(spec_debit_note)
+    spec_debit_note.loader.exec_module(debit_note_module)
+    print(" Successfully imported debit_note_backend")
+except Exception as e:
+    print(f" Error importing debit_note_backend: {e}")
+    debit_note_module = None
+
+try:
     import database_manager
-    print("✅ Successfully imported database_manager")
+    print(" Successfully imported database_manager")
 except ImportError as e:
-    print(f"❌ Error importing database_manager: {e}")
+    print(f" Error importing database_manager: {e}")
     database_manager = None
 
 app = Flask(__name__)
 CORS(app)
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "dev-secret-key")
+
+def _sanitize_db_filename(name: str) -> str:
+    """
+    Return a safe sqlite filename in the project folder.
+    Allows letters/numbers/space/._- and forces .db extension.
+    """
+    if not name:
+        return "tally_data.db"
+    base = str(name).strip()
+    # Normalize common inputs like "AGRITOUGH MACHINERIES - (from 1-Apr-25)"
+    base = re.sub(r"\s+", " ", base)
+    base = re.sub(r"[^A-Za-z0-9 ._\\-]", "", base).strip()
+    base = base.replace(" ", "_")
+    if not base:
+        base = "company"
+    if not base.lower().endswith(".db"):
+        base = base + ".db"
+    # Block path traversal / directories
+    base = os.path.basename(base)
+    return base
+
+@app.before_request
+def _set_active_company_db():
+    if not database_manager:
+        return
+    active = session.get("active_db") or getattr(database_manager, "DEFAULT_DB_NAME", "tally_data.db")
+    try:
+        database_manager.set_active_db(active)
+    except Exception:
+        pass
+
+@app.route('/api/db/companies', methods=['GET'])
+def api_db_companies():
+    """List available *.db files in the project folder."""
+    try:
+        files = []
+        for fn in os.listdir(os.path.dirname(__file__)):
+            if fn.lower().endswith(".db") and os.path.isfile(os.path.join(os.path.dirname(__file__), fn)):
+                files.append(fn)
+        files = sorted(files, key=lambda x: (x != "tally_data.db", x.lower()))
+        return jsonify({"companies": files, "count": len(files), "active_db": session.get("active_db", "tally_data.db")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/db/active', methods=['GET', 'POST'])
+def api_db_active():
+    if request.method == 'GET':
+        return jsonify({"active_db": session.get("active_db", "tally_data.db")})
+    body = request.get_json(force=True, silent=True) or {}
+    db_name = _sanitize_db_filename(body.get("db_name", "tally_data.db"))
+    session["active_db"] = db_name
+    if database_manager:
+        try:
+            database_manager.set_active_db(db_name)
+            database_manager.init_db(db_name=db_name)
+        except Exception:
+            pass
+    return jsonify({"status": "ok", "active_db": db_name})
+
+@app.route('/api/zoho/diag', methods=['GET'])
+def api_zoho_diag():
+    """Non-sensitive Zoho auth diagnostics (DC/domains + token refresh result)."""
+    try:
+        from modules.zoho_connector import zoho, ACCOUNTS_DOMAIN, API_DOMAIN
+    except Exception as e:
+        return jsonify({"error": f"Zoho connector not available: {e}"}), 500
+
+    token = zoho.get_access_token()
+    return jsonify({
+        "accounts_domain": ACCOUNTS_DOMAIN,
+        "api_domain": API_DOMAIN,
+        "auth_url": zoho.auth_url,
+        "token_ok": bool(token),
+        "has_client_id": bool(zoho.client_id),
+        "has_client_secret": bool(zoho.client_secret),
+        "has_refresh_token": bool(zoho.refresh_token),
+        "client_id_tail": (zoho.client_id[-6:] if zoho.client_id else ""),
+        "refresh_token_tail": (zoho.refresh_token[-6:] if zoho.refresh_token else ""),
+    })
+
+
+@app.route('/api/zoho/contacts/<contact_id>/debug', methods=['GET'])
+def api_zoho_contact_debug(contact_id):
+    """
+    Debug helper: fetch a single contact from Zoho Books and return only the fields
+    we care about for phone/mobile formatting.
+    """
+    try:
+        from modules.zoho_connector import zoho
+    except Exception as e:
+        return jsonify({"error": f"Zoho connector not available: {e}"}), 500
+
+    res = zoho.api_call("GET", f"/contacts/{contact_id}")
+    if res.get("code") != 0:
+        return jsonify({"status": "error", "code": res.get("code"), "message": res.get("message"), "raw": res}), 400
+
+    c = res.get("contact", {}) or {}
+    cps = c.get("contact_persons", []) or []
+    cps_slim = []
+    for cp in cps:
+        cps_slim.append({
+            "contact_person_id": cp.get("contact_person_id"),
+            "is_primary_contact": cp.get("is_primary_contact"),
+            "phone": cp.get("phone"),
+            "mobile": cp.get("mobile"),
+            "email": cp.get("email"),
+        })
+
+    out = {
+        "contact_id": c.get("contact_id"),
+        "contact_name": c.get("contact_name"),
+        "contact_type": c.get("contact_type"),
+        "gst_treatment": c.get("gst_treatment"),
+        "gst_no": c.get("gst_no"),
+        "phone": c.get("phone"),
+        "mobile": c.get("mobile"),
+        "contact_persons": cps_slim,
+    }
+    return jsonify({"status": "ok", "contact": out})
+
+
+@app.route('/api/zoho/items/<item_id>/debug', methods=['GET'])
+def api_zoho_item_debug(item_id):
+    """Debug helper: fetch one item and show tax + custom_fields payload from Zoho."""
+    try:
+        from modules.zoho_connector import zoho
+    except Exception as e:
+        return jsonify({"error": f"Zoho connector not available: {e}"}), 500
+
+    res = zoho.api_call("GET", f"/items/{item_id}")
+    if res.get("code") != 0:
+        return jsonify({"status": "error", "code": res.get("code"), "message": res.get("message"), "raw": res}), 400
+
+    it = res.get("item", {}) or {}
+    out = {
+        "item_id": it.get("item_id"),
+        "name": it.get("name"),
+        "tax_id": it.get("tax_id"),
+        "tax_name": it.get("tax_name"),
+        "item_tax_preferences": it.get("item_tax_preferences"),
+        "custom_fields": it.get("custom_fields"),
+    }
+    return jsonify({"status": "ok", "item": out})
+
+
 
 # ---------------------------------------------------------
 # ROUTES
@@ -106,6 +284,247 @@ def api_db_ledgers():
         return jsonify({"ledgers": ledgers, "count": len(ledgers)})
     except Exception as e:
         return jsonify({"error": str(e)}), 500
+
+@app.route('/api/db/import-masters', methods=['POST'])
+def api_db_import_masters():
+    """
+    Import a Tally Master XML (All Masters) into SQLite.
+    Supports multi-company by selecting/creating a DB file.
+    """
+    if not database_manager:
+        return jsonify({"error": "DB Manager not loaded"}), 500
+
+    mf = request.files.get('master_file') or request.files.get('xml_file') or request.files.get('file')
+    if not mf or not mf.filename:
+        return jsonify({"error": "master_file (.xml) is required"}), 400
+
+    target = (request.form.get('target') or 'existing').strip().lower()  # existing | new
+    requested_db = request.form.get('db_name') or request.form.get('company_db') or ''
+
+    xml_bytes = mf.read()
+    if not xml_bytes:
+        return jsonify({"error": "Empty file"}), 400
+
+    # Extract company name from XML (optional default db name)
+    xml_text = ""
+    try:
+        xml_text = xml_bytes.decode("utf-16", errors="ignore")
+    except Exception:
+        try:
+            xml_text = xml_bytes.decode("utf-8", errors="ignore")
+        except Exception:
+            xml_text = ""
+    m = re.search(r"<SVCURRENTCOMPANY>(.*?)</SVCURRENTCOMPANY>", xml_text, flags=re.IGNORECASE | re.DOTALL)
+    company_from_file = (m.group(1).strip() if m else "")
+
+    if target == "new":
+        chosen = requested_db or company_from_file or "new_company"
+        db_name = _sanitize_db_filename(chosen)
+    else:
+        db_name = session.get("active_db", "tally_data.db")
+        db_name = _sanitize_db_filename(db_name)
+
+    # Set active db for this request + session
+    session["active_db"] = db_name
+    database_manager.set_active_db(db_name)
+    database_manager.init_db(db_name=db_name)
+
+    # Parse XML masters (ledgers/groups/items)
+    try:
+        from modules import json_to_zoho_converter as conv
+    except Exception as e:
+        return jsonify({"error": f"Converter not available: {e}"}), 500
+
+    parsed = conv.parse_tally_json(xml_bytes)
+    records = parsed.get("records", []) or []
+    ctx = parsed.get("context", {}) or {}
+    group_parent_map = ctx.get("group_parent_map", {}) if isinstance(ctx, dict) else {}
+
+    def _safe_float(v):
+        try:
+            return float(str(v).replace(",", "").strip())
+        except Exception:
+            return 0.0
+
+    # Resolve primary group by traversing parents
+    def _primary_group(group_name: str) -> str:
+        if not group_name:
+            return ""
+        seen = set()
+        cur = group_name
+        parent = group_parent_map.get(cur, "")
+        while parent and parent not in seen:
+            seen.add(parent)
+            cur = parent
+            parent = group_parent_map.get(cur, "")
+        return cur
+
+    imported = {"groups": 0, "ledgers": 0, "items": 0, "errors": []}
+    seen_groups = set()
+    seen_ledgers = set()
+    seen_items = set()
+
+    # 1) Groups (use parsed XML context)
+    for g in (ctx.get("groups") or []):
+        name = (g.get("name") or "").strip()
+        if not name:
+            continue
+        if name in seen_groups:
+            continue
+        seen_groups.add(name)
+        parent = (g.get("parent") or "").strip()
+        data = {"name": name, "parent": parent, "primary_group": _primary_group(name)}
+        try:
+            database_manager.insert_or_update_group(data)
+            imported["groups"] += 1
+        except Exception as e:
+            imported["errors"].append(f"Group '{name}': {e}")
+
+    # 2) Ledgers (Customers/Vendors/Others)
+    for r in records:
+        if str(r.get("metadata_type", "")).lower() != "ledger":
+            continue
+        name = (r.get("ContactName") or r.get("name") or "").strip()
+        if not name:
+            continue
+        if name in seen_ledgers:
+            continue
+        seen_ledgers.add(name)
+        parent = (r.get("Under") or r.get("parent") or "").strip()
+        ct = str(r.get("ContactType") or "").strip().lower()
+        if ct == "customer":
+            ltype = "customer"
+        elif ct == "vendor":
+            ltype = "vendor"
+        else:
+            ltype = "other"
+
+        data = {
+            "name": name,
+            "parent": parent,
+            "type": ltype,
+            "address": (r.get("BillingAddress") or r.get("address") or "").strip(),
+            "state": (r.get("BillingState") or r.get("state") or "").strip(),
+            "country": (r.get("BillingCountry") or r.get("country") or "").strip(),
+            "pincode": (r.get("BillingZip") or r.get("pincode") or "").strip(),
+            "email": (r.get("EmailAddress") or r.get("email") or "").strip(),
+            "phone": str(r.get("Phone") or r.get("phone") or "").strip(),
+            "gstin": (r.get("GSTIN") or r.get("gstin") or "").strip(),
+            "gst_reg_type": (r.get("RegistrationType") or r.get("gst_reg_type") or "").strip(),
+            "pan": (r.get("PAN") or r.get("pan") or "").strip(),
+            "opening_balance": _safe_float(r.get("openingbalance") or r.get("opening_balance") or r.get("OpeningBalance") or 0),
+            "closing_balance": _safe_float(r.get("closingbalance") or r.get("closing_balance") or r.get("ClosingBalance") or 0),
+        }
+        try:
+            database_manager.insert_or_update_ledger(data)
+            imported["ledgers"] += 1
+        except Exception as e:
+            imported["errors"].append(f"Ledger '{name}': {e}")
+
+    # 3) Items (if present in Master.xml)
+    for r in records:
+        if str(r.get("metadata_type", "")).lower() != "stockitem":
+            continue
+        name = (r.get("ItemName") or r.get("name") or "").strip()
+        if not name:
+            continue
+        if name in seen_items:
+            continue
+        seen_items.add(name)
+        data = {
+            "name": name,
+            "group_name": (r.get("parent") or r.get("group_name") or r.get("stockgroup") or "").strip(),
+            "category": (r.get("category") or "").strip(),
+            "unit": (r.get("BASEUNITS") or r.get("baseunits") or r.get("unit") or "").strip(),
+            "hsn_source": "",
+            "hsn": (r.get("hsn") or r.get("HSN") or r.get("hsncode") or "").strip(),
+            "description": (r.get("description") or r.get("Description") or "").strip(),
+            "gst_applicable": (r.get("gstapplicable") or r.get("GSTAPPLICABLE") or "").strip(),
+            "gst_rate_source": "",
+            "gst_rate": _safe_float(r.get("gstrate") or r.get("GST_RATE") or 0),
+            "taxability": (r.get("taxability") or "").strip(),
+            "supply_type": (r.get("supplytype") or "").strip(),
+            "rate_of_duty": _safe_float(r.get("rateofduty") or 0),
+            "qty": _safe_float(r.get("qty") or 0),
+            "qty_unit": (r.get("qty_unit") or "").strip(),
+            "rate": _safe_float(r.get("rate") or 0),
+            "rate_unit": (r.get("rate_unit") or "").strip(),
+            "value": _safe_float(r.get("value") or 0),
+        }
+        try:
+            database_manager.insert_or_update_item(data)
+            imported["items"] += 1
+        except Exception as e:
+            imported["errors"].append(f"Item '{name}': {e}")
+
+    return jsonify({
+        "status": "ok",
+        "active_db": db_name,
+        "company_from_file": company_from_file,
+        "imported": imported,
+    })
+
+
+@app.route('/api/db/import-items-xml', methods=['POST'])
+def api_db_import_items_xml():
+    """
+    Import Items XML (Stock Groups + Stock Items) into SQLite.
+    Uses items/items_backend.py parsing so all item fields get populated.
+    Supports multi-company by selecting/creating a DB file.
+    """
+    if not database_manager:
+        return jsonify({"error": "DB Manager not loaded"}), 500
+    if not items_module or not hasattr(items_module, "import_items_from_exported_xml"):
+        return jsonify({"error": "Items backend not available"}), 500
+
+    mf = request.files.get('items_file') or request.files.get('xml_file') or request.files.get('file')
+    if not mf or not mf.filename:
+        return jsonify({"error": "items_file (.xml) is required"}), 400
+
+    target = (request.form.get('target') or 'existing').strip().lower()  # existing | new
+    requested_db = request.form.get('db_name') or request.form.get('company_db') or ''
+
+    xml_bytes = mf.read()
+    if not xml_bytes:
+        return jsonify({"error": "Empty file"}), 400
+
+    # Decode XML (best-effort)
+    xml_text = ""
+    try:
+        xml_text = xml_bytes.decode("utf-16", errors="ignore")
+    except Exception:
+        try:
+            xml_text = xml_bytes.decode("utf-8", errors="ignore")
+        except Exception:
+            xml_text = ""
+
+    # Extract company name from XML (optional default db name)
+    m = re.search(r"<SVCURRENTCOMPANY>(.*?)</SVCURRENTCOMPANY>", xml_text, flags=re.IGNORECASE | re.DOTALL)
+    company_from_file = (m.group(1).strip() if m else "")
+
+    if target == "new":
+        chosen = requested_db or company_from_file or "new_company"
+        db_name = _sanitize_db_filename(chosen)
+    else:
+        db_name = session.get("active_db", "tally_data.db")
+        db_name = _sanitize_db_filename(db_name)
+
+    # Set active db for this request + session
+    session["active_db"] = db_name
+    database_manager.set_active_db(db_name)
+    database_manager.init_db(db_name=db_name)
+
+    try:
+        imported = items_module.import_items_from_exported_xml(xml_text, save_to_db=True)
+    except Exception as e:
+        return jsonify({"error": f"Failed to import items: {e}"}), 500
+
+    return jsonify({
+        "status": "ok",
+        "active_db": db_name,
+        "company_from_file": company_from_file,
+        "imported": imported,
+    })
 
 @app.route('/api/db/items', methods=['GET'])
 def api_db_items():
@@ -261,10 +680,11 @@ def api_fetch_items():
         return jsonify({"error": str(e)}), 500
 
 @app.route('/api/ledgers/sync_zoho', methods=['POST'])
-def api_sync_ledgers():
+def api_sync_ledgers(): 
     try:
         selected = request.json.get("ledgers") if request.is_json else None
-        result = ledgers_module.sync_ledgers_to_zoho(selected)
+        update_existing = request.json.get("update_existing", False) if request.is_json else False
+        result = ledgers_module.sync_ledgers_to_zoho(selected, update_existing=update_existing)
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -274,7 +694,8 @@ def api_sync_customers():
     """Sync ONLY customers to Zoho Books."""
     try:
         selected = request.json.get("ledgers") if request.is_json else None
-        result = ledgers_module.sync_ledgers_to_zoho(selected, contact_type_filter='customer')
+        update_existing = request.json.get("update_existing", True) if request.is_json else True
+        result = ledgers_module.sync_ledgers_to_zoho(selected, contact_type_filter='customer', update_existing=update_existing)
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -284,7 +705,8 @@ def api_sync_vendors():
     """Sync ONLY vendors to Zoho Books."""
     try:
         selected = request.json.get("ledgers") if request.is_json else None
-        result = ledgers_module.sync_ledgers_to_zoho(selected, contact_type_filter='vendor')
+        update_existing = request.json.get("update_existing", True) if request.is_json else True
+        result = ledgers_module.sync_ledgers_to_zoho(selected, contact_type_filter='vendor', update_existing=update_existing)
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
@@ -315,6 +737,8 @@ def api_execute_group_sync():
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
 
+
+
 @app.route('/api/ledgers/create_standalone', methods=['POST'])
 def api_create_standalone():
     try:
@@ -336,6 +760,404 @@ def api_sync_items():
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/items/sync_zoho/start', methods=['POST'])
+def api_items_sync_zoho_start():
+    if not items_module:
+        return jsonify({"status": "error", "message": "Items backend not available"}), 500
+    if not job_manager or not sse_format:
+        return jsonify({"status": "error", "message": "Job manager not available"}), 500
+
+    body = request.get_json(force=True, silent=True) or {}
+    selected = body.get("items")
+
+    job = job_manager.create("items_sync_zoho")
+    job.log("Items sync job started.")
+
+    def _runner():
+        try:
+            res = items_module.sync_items_to_zoho(selected, log=job.log, stop_event=job.stop_event)
+            st = (res or {}).get("status")
+            if st == "success":
+                job_manager.finish(job.id, "success", result=res)
+            elif st == "stopped":
+                job_manager.finish(job.id, "stopped", result=res, message="Stopped by user")
+            else:
+                job_manager.finish(job.id, "error", result=res, message=(res or {}).get("message", "Failed"))
+        except Exception as e:
+            job.log(f"Unhandled error: {e}")
+            job_manager.finish(job.id, "error", result={"status": "error", "message": str(e)}, message=str(e))
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return jsonify({"status": "success", "job_id": job.id})
+
+
+@app.route('/api/jobs/<job_id>', methods=['GET'])
+def api_job_status(job_id):
+    if not job_manager:
+        return jsonify({"status": "error", "message": "Job manager not available"}), 500
+    job = job_manager.get(job_id)
+    if not job:
+        return jsonify({"status": "error", "message": "Job not found"}), 404
+    return jsonify({"status": "success", "job": job.snapshot(), "result": job.result if job.status != "running" else None})
+
+
+@app.route('/api/jobs/<job_id>/stop', methods=['POST'])
+def api_job_stop(job_id):
+    if not job_manager:
+        return jsonify({"status": "error", "message": "Job manager not available"}), 500
+    ok = job_manager.stop(job_id)
+    if not ok:
+        return jsonify({"status": "error", "message": "Job not found"}), 404
+    return jsonify({"status": "success"})
+
+
+@app.route('/api/jobs/<job_id>/stream', methods=['GET'])
+def api_job_stream(job_id):
+    if not job_manager or not sse_format:
+        return jsonify({"status": "error", "message": "Job manager not available"}), 500
+    job = job_manager.get(job_id)
+    if not job:
+        return jsonify({"status": "error", "message": "Job not found"}), 404
+
+    def _gen():
+        last_seq = 0
+        try:
+            last_seq = int((request.args.get("from") or "0").strip() or 0)
+        except Exception:
+            last_seq = 0
+
+        yield sse_format("status", job.snapshot())
+
+        while True:
+            entries = job.get_logs_since(last_seq)
+            for seq, ts, msg in entries:
+                last_seq = seq
+                yield sse_format("log", {"seq": seq, "ts": ts, "message": msg})
+
+            if job.status != "running":
+                yield sse_format("done", {"job": job.snapshot(), "result": job.result})
+                break
+
+            job.wait(timeout=1.5)
+            yield ": keepalive\n\n"
+
+    headers = {
+        "Cache-Control": "no-cache",
+        "X-Accel-Buffering": "no",
+    }
+    return Response(stream_with_context(_gen()), headers=headers, mimetype="text/event-stream")
+
+
+@app.route('/api/items/inventory_adjustment/preview', methods=['POST'])
+def api_items_inventory_adjustment_preview():
+    """
+    Upload Excel (opening stock totals) + XML (godown/warehouse summary) and return:
+    - items to apply (non-negative)
+    - negative items report
+    """
+    try:
+        excel_file = request.files.get("excel_file")
+        xml_file = request.files.get("xml_file")
+        if not excel_file or not xml_file:
+            return jsonify({"status": "error", "message": "excel_file and xml_file are required"}), 400
+
+        upload_dir = os.path.join(os.path.dirname(__file__), "uploads", "inventory_adjustment")
+        os.makedirs(upload_dir, exist_ok=True)
+
+        ts = str(int(time.time()))
+        excel_path = os.path.join(upload_dir, f"opening_{ts}.xlsx")
+        xml_path = os.path.join(upload_dir, f"godown_{ts}.xml")
+        excel_file.save(excel_path)
+        xml_file.save(xml_path)
+
+        excel_map = items_module.parse_opening_excel_xlsx(excel_path)
+        xml_map = items_module.parse_godown_xml(xml_path)
+        to_apply, negative, stats = items_module.compute_inventory_adjustment(excel_map, xml_map)
+
+        # Store last preview file paths in session for apply
+        session["inv_adj_excel_path"] = excel_path
+        session["inv_adj_xml_path"] = xml_path
+        session["inv_adj_run_id"] = ts
+
+        return jsonify({
+            "status": "success",
+            "stats": stats,
+            "to_apply_count": len(to_apply),
+            "negative_count": len(negative),
+            "negative_preview": negative[:200],
+            "apply_preview": to_apply[:50],
+        })
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/items/inventory_adjustment/apply', methods=['POST'])
+def api_items_inventory_adjustment_apply():
+    """
+    Apply the latest preview (stored in session) to Zoho.
+    """
+    try:
+        dry_run = str(request.form.get("dry_run", "0")).strip() in ("1", "true", "yes", "on")
+        resume = str(request.form.get("resume", "1")).strip() in ("1", "true", "yes", "on")
+        limit_raw = (request.form.get("limit") or "").strip()
+        limit = 0
+        try:
+            limit = int(limit_raw) if limit_raw else 0
+        except Exception:
+            limit = 0
+        excel_path = session.get("inv_adj_excel_path")
+        xml_path = session.get("inv_adj_xml_path")
+        run_id = session.get("inv_adj_run_id") or ""
+        if not excel_path or not xml_path or (not os.path.exists(excel_path)) or (not os.path.exists(xml_path)):
+            return jsonify({"status": "error", "message": "No preview found. Run Preview first."}), 400
+
+        excel_map = items_module.parse_opening_excel_xlsx(excel_path)
+        xml_map = items_module.parse_godown_xml(xml_path)
+        to_apply, negative, stats = items_module.compute_inventory_adjustment(excel_map, xml_map)
+
+        # Apply only non-negative items (optional limit for testing)
+        if limit and limit > 0:
+            to_apply = to_apply[:limit]
+        result = items_module.apply_inventory_adjustment_to_zoho(to_apply, dry_run=dry_run, run_id=run_id, resume=resume)
+        result["stats"] = stats
+        result["negative_count"] = len(negative)
+        result["negative_preview"] = negative[:200]
+        result["applied_limit"] = limit or 0
+        result["resume"] = bool(resume)
+        result["run_id"] = run_id
+
+        # Build a run report (xlsx) and store path in session for download
+        try:
+            from openpyxl import Workbook
+            wb = Workbook()
+
+            # Summary sheet
+            ws = wb.active
+            ws.title = "Summary"
+            ws.append(["Key", "Value"])
+            ws.append(["xml_items", stats.get("xml_items")])
+            ws.append(["excel_items", stats.get("excel_items")])
+            ws.append(["to_apply", stats.get("to_apply")])
+            ws.append(["negative", stats.get("negative")])
+            ws.append(["applied_limit", limit or 0])
+            ws.append(["dry_run", bool(dry_run)])
+
+            res_core = (result.get("results") or {})
+            ws.append(["updated", res_core.get("updated", 0)])
+            ws.append(["failed", res_core.get("failed", 0)])
+            ws.append(["missing_item_id", res_core.get("missing_item_id", 0)])
+            ws.append(["skipped", res_core.get("skipped", 0)])
+
+            # Updated sheet
+            ws_u = wb.create_sheet("Updated")
+            ws_u.append(["Item Name", "Zoho Item ID"])
+            for it in (res_core.get("updated_items") or []):
+                ws_u.append([it.get("name", ""), it.get("item_id", "")])
+
+            # Skipped sheet (includes missing_item_id + dry_run)
+            ws_s = wb.create_sheet("Skipped")
+            ws_s.append(["Item Name", "Reason", "Zoho Item ID"])
+            for it in (res_core.get("skipped_items") or []):
+                ws_s.append([it.get("name", ""), it.get("reason", ""), it.get("item_id", "")])
+
+            # Errors sheet
+            ws_e = wb.create_sheet("Errors")
+            ws_e.append(["Item Name", "Reason"])
+            for er in (res_core.get("errors") or []):
+                ws_e.append([er.get("name", ""), er.get("reason", "")])
+
+            # Negative sheet
+            ws_n = wb.create_sheet("Negative")
+            ws_n.append(["Item Name", "Reason", "Excel Qty", "XML Main Qty", "XML Other Qty", "Needed Main Qty"])
+            for r in negative:
+                ws_n.append([
+                    r.get("name", ""),
+                    r.get("reason", ""),
+                    r.get("excel_qty", ""),
+                    r.get("xml_main_qty", ""),
+                    r.get("xml_other_qty", ""),
+                    r.get("needed_main_qty", ""),
+                ])
+
+            upload_dir = os.path.join(os.path.dirname(__file__), "uploads", "inventory_adjustment")
+            os.makedirs(upload_dir, exist_ok=True)
+            ts2 = str(int(time.time()))
+            report_path = os.path.join(upload_dir, f"inv_adj_run_report_{ts2}.xlsx")
+            wb.save(report_path)
+            session["inv_adj_last_run_report"] = report_path
+            result["run_report_url"] = "/api/items/inventory_adjustment/last_run_report.xlsx"
+        except Exception:
+            pass
+
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/items/inventory_adjustment/last_run_report.xlsx', methods=['GET'])
+def api_items_inventory_adjustment_last_run_report():
+    """Download the last Inventory Adjustment apply run report (xlsx)."""
+    try:
+        p = session.get("inv_adj_last_run_report")
+        if not p or not os.path.exists(p):
+            return jsonify({"status": "error", "message": "No run report found. Run Apply first."}), 400
+        return send_file(
+            p,
+            as_attachment=True,
+            download_name="inventory_adjustment_run_report.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/items/inventory_adjustment/negative_report.xlsx', methods=['GET'])
+def api_items_inventory_adjustment_negative_report():
+    """
+    Download full negative report as Excel (based on last preview stored in session).
+    """
+    try:
+        excel_path = session.get("inv_adj_excel_path")
+        xml_path = session.get("inv_adj_xml_path")
+        if not excel_path or not xml_path or (not os.path.exists(excel_path)) or (not os.path.exists(xml_path)):
+            return jsonify({"status": "error", "message": "No preview found. Run Preview first."}), 400
+
+        excel_map = items_module.parse_opening_excel_xlsx(excel_path)
+        xml_map = items_module.parse_godown_xml(xml_path)
+        _to_apply, negative, _stats = items_module.compute_inventory_adjustment(excel_map, xml_map)
+
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Negative Items"
+        ws.append(["Item Name", "Reason", "Excel Qty", "XML Main Qty", "XML Other Qty", "Needed Main Qty"])
+        for r in negative:
+            ws.append([
+                r.get("name", ""),
+                r.get("reason", ""),
+                r.get("excel_qty", ""),
+                r.get("xml_main_qty", ""),
+                r.get("xml_other_qty", ""),
+                r.get("needed_main_qty", ""),
+            ])
+
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        return send_file(
+            bio,
+            as_attachment=True,
+            download_name="negative_stock_report.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/items/inventory_adjustment/matched_report.xlsx', methods=['GET'])
+def api_items_inventory_adjustment_matched_report():
+    """
+    Download matched (Excel+XML) report as Excel (based on last preview stored in session).
+    """
+    try:
+        excel_path = session.get("inv_adj_excel_path")
+        xml_path = session.get("inv_adj_xml_path")
+        if not excel_path or not xml_path or (not os.path.exists(excel_path)) or (not os.path.exists(xml_path)):
+            return jsonify({"status": "error", "message": "No preview found. Run Preview first."}), 400
+
+        excel_map = items_module.parse_opening_excel_xlsx(excel_path)
+        xml_map = items_module.parse_godown_xml(xml_path)
+        matched = items_module.build_matched_items_report(excel_map, xml_map)
+
+        from openpyxl import Workbook
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Matched Items"
+        ws.append([
+            "Item Name",
+            "Status",
+            "Excel Qty",
+            "Excel Rate",
+            "XML Main Qty",
+            "XML Other Qty",
+            "Needed Main Qty",
+            "ExcelQty + XMLMainQty",
+        ])
+        for r in matched:
+            ws.append([
+                r.get("name", ""),
+                r.get("status", ""),
+                r.get("excel_qty", 0),
+                r.get("excel_rate", 0),
+                r.get("xml_main_qty", 0),
+                r.get("xml_other_qty", 0),
+                r.get("needed_main_qty", 0),
+                r.get("sum_qty", 0),
+            ])
+
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        return send_file(
+            bio,
+            as_attachment=True,
+            download_name="matched_items_report.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/items/godown_xml/to_transfer_excel.xlsx', methods=['POST'])
+def api_items_godown_xml_to_transfer_excel():
+    """
+    Upload a Godown Summary XML (MAIN warehouse export) and download an Excel file
+    in the same 4-column format as 'Stocks Transferred to Main warehouse.xlsx'.
+    """
+    try:
+        xml_file = request.files.get("xml_file")
+        if not xml_file:
+            return jsonify({"status": "error", "message": "xml_file is required"}), 400
+
+        upload_dir = os.path.join(os.path.dirname(__file__), "uploads", "inventory_adjustment")
+        os.makedirs(upload_dir, exist_ok=True)
+        ts = str(int(time.time()))
+        xml_path = os.path.join(upload_dir, f"godown_transfer_{ts}.xml")
+        xml_file.save(xml_path)
+
+        xml_map = items_module.parse_godown_xml(xml_path)
+        wb = items_module.build_stock_transfer_workbook_from_godown_xml(xml_map)
+
+        bio = io.BytesIO()
+        wb.save(bio)
+        bio.seek(0)
+        return send_file(
+            bio,
+            as_attachment=True,
+            download_name="stocks_transferred_to_main_warehouse.xlsx",
+            mimetype="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        )
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/items/sync_map/refresh_from_zoho', methods=['POST'])
+def api_items_refresh_sync_map_from_zoho():
+    """
+    Build local Zoho item_id map by fetching Zoho items list (no create/update).
+    This makes Inventory Adjustment Apply work without re-running full Items sync.
+    """
+    try:
+        if not items_module or not hasattr(items_module, "refresh_zoho_item_sync_map_from_zoho"):
+            return jsonify({"status": "error", "message": "Items module not available"}), 500
+        result = items_module.refresh_zoho_item_sync_map_from_zoho()
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+
 
 # Journal routes
 @app.route('/journals')
@@ -369,6 +1191,123 @@ def api_sync_journals():
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/journals/upload', methods=['POST'])
+def api_upload_journals():
+    """
+    Upload a Tally-exported JSON file for journals (offline mode).
+    Parses the file using journel_backend.parse_tally_json,
+    saves to SQLite, and returns the journals list + stats.
+    """
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        file = request.files['file']
+        if not file or file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+
+        import tempfile, os
+        from datetime import datetime as _dt
+
+        # Save to temp file
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as tmp:
+            file.save(tmp.name)
+            tmp_path = tmp.name
+
+        try:
+            # Parse using existing journel_backend parser
+            parsed = journel_module.parse_tally_json(tmp_path)
+        finally:
+            os.unlink(tmp_path)
+
+        if not parsed:
+            return jsonify({"error": "No journals found in the JSON file. Make sure it is a Tally Journal voucher export."}), 400
+
+        # Convert parse_tally_json output (ledger_entries) to the format
+        # expected by the UI (line_items with debit_or_credit field)
+        journals_out = []
+        for j in parsed:
+            line_items = []
+            for entry in j.get("ledger_entries", []):
+                debit  = float(entry.get("debit",  0) or 0)
+                credit = float(entry.get("credit", 0) or 0)
+                if debit > 0:
+                    line_items.append({
+                        "ledger_name":    entry.get("ledger_name", ""),
+                        "ledger_type":    "account",
+                        "amount":         debit,
+                        "debit_or_credit":"debit",
+                        "tag_category":   "",
+                        "tag_option":     ""
+                    })
+                if credit > 0:
+                    line_items.append({
+                        "ledger_name":    entry.get("ledger_name", ""),
+                        "ledger_type":    "account",
+                        "amount":         credit,
+                        "debit_or_credit":"credit",
+                        "tag_category":   "",
+                        "tag_option":     ""
+                    })
+
+            journals_out.append({
+                "date":           j.get("date", ""),
+                "journal_number": j.get("journal_number", ""),
+                "narration":      j.get("narration", ""),
+                "tally_guid":     j.get("tally_guid", ""),
+                "voucher_type":   j.get("voucher_type", "Journal"),
+                "line_items":     line_items,
+                "cost_center_allocations": j.get("cost_center_allocations", [])
+            })
+
+        # ── Save to SQLite so the DB tab also shows them ──────────────────
+        if database_manager and journals_out:
+            now = _dt.now().isoformat()
+            db_data_list = []
+            for jrnl in journals_out:
+                td = sum(i["amount"] for i in jrnl["line_items"] if i["debit_or_credit"] == "debit")
+                tc = sum(i["amount"] for i in jrnl["line_items"] if i["debit_or_credit"] == "credit")
+                db_data_list.append({
+                    "journal_number": jrnl["journal_number"],
+                    "date":           jrnl["date"],
+                    "narration":      jrnl["narration"],
+                    "total_debit":    round(td, 2),
+                    "total_credit":   round(tc, 2),
+                    "line_items":     json.dumps(jrnl["line_items"]),
+                    "from_date":      "",
+                    "to_date":        "",
+                    "created_at":     now,
+                    "updated_at":     now,
+                })
+            try:
+                database_manager.bulk_save_journals(db_data_list)
+            except AttributeError:
+                pass  # bulk_save_journals may not exist on older DB manager
+
+        total_debit  = sum(
+            i["amount"] for j in journals_out for i in j["line_items"]
+            if i["debit_or_credit"] == "debit"
+        )
+        total_credit = sum(
+            i["amount"] for j in journals_out for i in j["line_items"]
+            if i["debit_or_credit"] == "credit"
+        )
+
+        return jsonify({
+            "journals": journals_out,
+            "stats": {
+                "total_journals": len(journals_out),
+                "total_debit":    round(total_debit,  2),
+                "total_credit":   round(total_credit, 2),
+            }
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 
 # Invoice routes
 @app.route('/invoices')
@@ -611,6 +1550,79 @@ def api_fetch_receipts():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+
+@app.route('/api/payments_made/fetch/start', methods=['POST'])
+def api_payments_made_fetch_start():
+    if not payments_module:
+        return jsonify({"status": "error", "message": "Payments backend not available"}), 500
+    if not job_manager:
+        return jsonify({"status": "error", "message": "Job manager not available"}), 500
+
+    body = request.get_json(force=True, silent=True) or {}
+    from_date = body.get("from_date", "20250401")
+    to_date = body.get("to_date", "20250430")
+    limit = body.get("limit")
+    company_name = body.get("company_name")
+
+    job = job_manager.create("payments_made_fetch")
+    job.log(f"Payments Made fetch job started: {from_date} -> {to_date}")
+
+    def _runner():
+        try:
+            fn = getattr(payments_module, "get_all_payments_data_day_by_day", None) or getattr(payments_module, "get_all_payments_data", None)
+            if not callable(fn):
+                raise RuntimeError("Payments fetch function not available")
+            if getattr(fn, "__name__", "") == "get_all_payments_data_day_by_day":
+                res = fn(from_date, to_date, limit, company_name, log=job.log, stop_event=job.stop_event)
+            else:
+                res = fn(from_date, to_date, limit, company_name)
+            status = (res or {}).get("status") or "success"
+            if job.stop_event.is_set() and status == "success":
+                status = "stopped"
+                res["status"] = "stopped"
+            job_manager.finish(job.id, "success" if status == "success" else status, result=res)
+        except Exception as e:
+            job.log(f"Unhandled error: {e}")
+            job_manager.finish(job.id, "error", result={"status": "error", "message": str(e)}, message=str(e))
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return jsonify({"status": "success", "job_id": job.id})
+
+
+@app.route('/api/receipts/fetch/start', methods=['POST'])
+def api_receipts_fetch_start():
+    if not receipts_module:
+        return jsonify({"status": "error", "message": "Receipts backend not available"}), 500
+    if not job_manager:
+        return jsonify({"status": "error", "message": "Job manager not available"}), 500
+
+    body = request.get_json(force=True, silent=True) or {}
+    from_date = body.get("from_date", "20250401")
+    to_date = body.get("to_date", "20250430")
+    limit = body.get("limit")
+    company_name = body.get("company_name")
+
+    job = job_manager.create("receipts_fetch")
+    job.log(f"Receipts fetch job started: {from_date} -> {to_date}")
+
+    def _runner():
+        try:
+            fn = getattr(receipts_module, "get_all_receipts_data_day_by_day", None) or getattr(receipts_module, "get_all_receipts_data", None)
+            if not callable(fn):
+                raise RuntimeError("Receipts fetch function not available")
+            res = fn(from_date, to_date, limit, company_name, log=job.log, stop_event=job.stop_event) if "day_by_day" in getattr(fn, "__name__", "") else fn(from_date, to_date, limit, company_name)
+            status = (res or {}).get("status") or "success"
+            if job.stop_event.is_set() and status == "success":
+                status = "stopped"
+                res["status"] = "stopped"
+            job_manager.finish(job.id, "success" if status == "success" else status, result=res)
+        except Exception as e:
+            job.log(f"Unhandled error: {e}")
+            job_manager.finish(job.id, "error", result={"status": "error", "message": str(e)}, message=str(e))
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return jsonify({"status": "success", "job_id": job.id})
+
 @app.route('/api/receipts/sync_zoho', methods=['POST'])
 def api_sync_receipts():
     try:
@@ -624,6 +1636,45 @@ def api_sync_receipts():
         return jsonify(result)
     except Exception as e:
         return jsonify({"status": "error", "message": str(e)}), 500
+
+
+@app.route('/api/receipts/zoho/sync/start', methods=['POST'])
+def api_receipts_zoho_sync_start():
+    if not receipts_module:
+        return jsonify({"status": "error", "message": "Receipts backend not available"}), 500
+    if not job_manager:
+        return jsonify({"status": "error", "message": "Job manager not available"}), 500
+
+    body = request.get_json(force=True, silent=True) or {}
+    from_date = body.get("from_date", "20250401")
+    to_date = body.get("to_date", "20250430")
+    limit = body.get("limit")
+    company_name = body.get("company_name")
+    cutoff_date = (body.get("cutoff_date") or os.environ.get("MIGRATION_CUTOFF_DATE") or "2025-03-31").strip()
+    opening_invoice_id = (body.get("opening_invoice_id") or os.environ.get("OPENING_BALANCE_ZOHO_INVOICE_ID") or "").strip()
+
+    job = job_manager.create("receipts_zoho_sync")
+    job.log(f"Receipts Zoho sync started: {from_date} -> {to_date} cutoff={cutoff_date}")
+
+    def _runner():
+        try:
+            fn = getattr(receipts_module, "sync_receipts_to_zoho_job", None)
+            if not callable(fn):
+                raise RuntimeError("Receipts Zoho sync function not available")
+            res = fn(from_date, to_date, limit, company_name, cutoff_date=cutoff_date, opening_invoice_id=opening_invoice_id, log=job.log, stop_event=job.stop_event)
+            st = (res or {}).get("status") or "success"
+            if st == "success":
+                job_manager.finish(job.id, "success", result=res)
+            elif st == "stopped":
+                job_manager.finish(job.id, "stopped", result=res, message="Stopped by user")
+            else:
+                job_manager.finish(job.id, "error", result=res, message=(res or {}).get("message", "Failed"))
+        except Exception as e:
+            job.log(f"Unhandled error: {e}")
+            job_manager.finish(job.id, "error", result={"status": "error", "message": str(e)}, message=str(e))
+
+    threading.Thread(target=_runner, daemon=True).start()
+    return jsonify({"status": "success", "job_id": job.id})
 
 @app.route('/api/db/sales_orders', methods=['GET'])
 def api_db_sales_orders():
@@ -788,7 +1839,7 @@ def api_db_payments_made():
                     if isinstance(payment['bill_allocations'], str):
                         payment['bill_allocations'] = json.loads(payment['bill_allocations'])
                 except Exception as e:
-                    print(f"⚠️ Error parsing bill_allocations for payment {payment.get('payment_number')}: {e}")
+                    print(f"️ Error parsing bill_allocations for payment {payment.get('payment_number')}: {e}")
                     payment['bill_allocations'] = []
             else:
                 payment['bill_allocations'] = []
@@ -798,7 +1849,7 @@ def api_db_payments_made():
                     if isinstance(payment['ledger_entries'], str):
                         payment['ledger_entries'] = json.loads(payment['ledger_entries'])
                 except Exception as e:
-                    print(f"⚠️ Error parsing ledger_entries for payment {payment.get('payment_number')}: {e}")
+                    print(f"️ Error parsing ledger_entries for payment {payment.get('payment_number')}: {e}")
                     payment['ledger_entries'] = []
             else:
                 payment['ledger_entries'] = []
@@ -808,7 +1859,7 @@ def api_db_payments_made():
                     if isinstance(payment['cost_center_allocations'], str):
                         payment['cost_center_allocations'] = json.loads(payment['cost_center_allocations'])
                 except Exception as e:
-                    print(f"⚠️ Error parsing cost_center_allocations for payment {payment.get('payment_number')}: {e}")
+                    print(f"️ Error parsing cost_center_allocations for payment {payment.get('payment_number')}: {e}")
                     payment['cost_center_allocations'] = []
             else:
                 payment['cost_center_allocations'] = []
@@ -837,7 +1888,7 @@ def api_db_receipts():
                     if isinstance(receipt['invoice_allocations'], str):
                         receipt['invoice_allocations'] = json.loads(receipt['invoice_allocations'])
                 except Exception as e:
-                    print(f"⚠️ Error parsing invoice_allocations for receipt {receipt.get('receipt_number')}: {e}")
+                    print(f"️ Error parsing invoice_allocations for receipt {receipt.get('receipt_number')}: {e}")
                     receipt['invoice_allocations'] = []
             else:
                 receipt['invoice_allocations'] = []
@@ -848,7 +1899,7 @@ def api_db_receipts():
                     if isinstance(receipt['ledger_entries'], str):
                         receipt['ledger_entries'] = json.loads(receipt['ledger_entries'])
                 except Exception as e:
-                    print(f"⚠️ Error parsing ledger_entries for receipt {receipt.get('receipt_number')}: {e}")
+                    print(f"️ Error parsing ledger_entries for receipt {receipt.get('receipt_number')}: {e}")
                     receipt['ledger_entries'] = []
             else:
                 receipt['ledger_entries'] = []
@@ -859,7 +1910,7 @@ def api_db_receipts():
                     if isinstance(receipt['cost_center_allocations'], str):
                         receipt['cost_center_allocations'] = json.loads(receipt['cost_center_allocations'])
                 except Exception as e:
-                    print(f"⚠️ Error parsing cost_center_allocations for receipt {receipt.get('receipt_number')}: {e}")
+                    print(f"️ Error parsing cost_center_allocations for receipt {receipt.get('receipt_number')}: {e}")
                     receipt['cost_center_allocations'] = []
             else:
                 receipt['cost_center_allocations'] = []
@@ -1033,7 +2084,437 @@ def api_db_contra():
     except Exception as e:
         return jsonify({"error": str(e)}), 500
 
+# ---------------------------------------------------------
+# CREDIT NOTE ROUTES
+# ---------------------------------------------------------
+@app.route('/credit_note')
+def credit_note_page():
+    return render_template('credit_note.html')
+
+@app.route('/api/credit_note/fetch', methods=['POST'])
+def api_fetch_credit_note():
+    try:
+        from_date = request.json.get("from_date", "20250401") if request.is_json else "20250401"
+        to_date = request.json.get("to_date", "20250430") if request.is_json else "20250430"
+        limit = request.json.get("limit") if request.is_json else None
+        
+        data = credit_note_module.get_all_credit_note_data(from_date, to_date, limit)
+        if data:
+            return jsonify(data)
+        return jsonify({"error": "Failed to fetch credit notes from Tally"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/credit_note/upload', methods=['POST'])
+def api_upload_credit_note():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        import tempfile, os
+        from datetime import datetime
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as temp:
+            file.save(temp.name)
+            temp_path = temp.name
+            
+        parsed_credit_notes = credit_note_module.parse_tally_json(temp_path)
+        
+        # Save to SQLite
+        if database_manager and parsed_credit_notes:
+            database_manager.init_db()
+            db_data_list = []
+            for credit_note in parsed_credit_notes:
+                db_data = {
+                    "credit_note_number": credit_note.get("credit_note_number", ""),
+                    "voucher_type": credit_note.get("voucher_type", "Credit Note"),
+                    "date": credit_note.get("date", ""),
+                    "from_account": credit_note.get("from_account", ""),
+                    "to_account": credit_note.get("to_account", ""),
+                    "amount": credit_note.get("amount", 0) or 0,
+                    "narration": credit_note.get("narration", ""),
+                    "ledger_entries": json.dumps(credit_note.get("ledger_entries", [])),
+                    "line_items": json.dumps(credit_note.get("line_items", [])),
+                    "cost_center_allocations": json.dumps(credit_note.get("cost_center_allocations", [])),
+                    "tally_guid": credit_note.get("tally_guid", ""),
+                    "company_name": "",
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat()
+                }
+                db_data_list.append(db_data)
+                
+            try:
+                database_manager.bulk_save_credit_notes(db_data_list)
+            except AttributeError:
+                pass
+                
+        os.unlink(temp_path)
+        
+        total_amount = sum(float(c.get("amount", 0)) for c in parsed_credit_notes)
+        return jsonify({"credit_notes": parsed_credit_notes, "total_amount": total_amount})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/credit_note/sync_zoho', methods=['POST'])
+def api_sync_credit_note():
+    try:
+        selected = request.json.get("credit_notes") if request.is_json else None
+        from_date = request.json.get("from_date", "20250401") if request.is_json else "20250401"
+        to_date = request.json.get("to_date", "20250430") if request.is_json else "20250430"
+        limit = request.json.get("limit") if request.is_json else None
+        
+        result = credit_note_module.sync_credit_note_to_zoho(selected, from_date, to_date, limit)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/db/credit_notes', methods=['GET'])
+def api_db_credit_notes():
+    if not database_manager: return jsonify({"error": "DB Manager not loaded"}), 500
+    try:
+        c_rows = database_manager.get_all_credit_notes()
+        credit_notes = []
+        for r in c_rows:
+            d = dict(r)
+            if isinstance(d.get('ledger_entries'), str):
+                try: d['ledger_entries'] = json.loads(d['ledger_entries'])
+                except: d['ledger_entries'] = []
+            if isinstance(d.get('line_items'), str):
+                try: d['line_items'] = json.loads(d['line_items'])
+                except: d['line_items'] = []
+            if isinstance(d.get('cost_center_allocations'), str):
+                try: d['cost_center_allocations'] = json.loads(d['cost_center_allocations'])
+                except: d['cost_center_allocations'] = []
+            credit_notes.append(d)
+                
+        total_amount = sum(float(r.get('amount', 0) or 0) for r in credit_notes)
+        return jsonify({
+            "credit_notes": credit_notes,
+            "count": len(credit_notes),
+            "total_amount": total_amount
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+# ---------------------------------------------------------
+# DEBIT NOTE ROUTES
+# ---------------------------------------------------------
+@app.route('/debit_note')
+def debit_note_page():
+    return render_template('debit_note.html')
+
+@app.route('/api/debit_note/fetch', methods=['POST'])
+def api_fetch_debit_note():
+    try:
+        from_date = request.json.get("from_date", "20250401") if request.is_json else "20250401"
+        to_date = request.json.get("to_date", "20250430") if request.is_json else "20250430"
+        limit = request.json.get("limit") if request.is_json else None
+        
+        data = debit_note_module.get_all_debit_note_data(from_date, to_date, limit)
+        if data:
+            return jsonify(data)
+        return jsonify({"error": "Failed to fetch debit notes from Tally"}), 500
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/debit_note/upload', methods=['POST'])
+def api_upload_debit_note():
+    try:
+        if 'file' not in request.files:
+            return jsonify({"error": "No file uploaded"}), 400
+        file = request.files['file']
+        if file.filename == '':
+            return jsonify({"error": "No selected file"}), 400
+        
+        import tempfile, os
+        from datetime import datetime
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.json') as temp:
+            file.save(temp.name)
+            temp_path = temp.name
+            
+        parsed_debit_notes = debit_note_module.parse_tally_json(temp_path)
+        
+        # Save to SQLite
+        if database_manager and parsed_debit_notes:
+            database_manager.init_db()
+            db_data_list = []
+            for debit_note in parsed_debit_notes:
+                db_data = {
+                    "debit_note_number": debit_note.get("debit_note_number", ""),
+                    "voucher_type": debit_note.get("voucher_type", "Debit Note"),
+                    "date": debit_note.get("date", ""),
+                    "from_account": debit_note.get("from_account", ""),
+                    "to_account": debit_note.get("to_account", ""),
+                    "amount": debit_note.get("amount", 0) or 0,
+                    "narration": debit_note.get("narration", ""),
+                    "ledger_entries": json.dumps(debit_note.get("ledger_entries", [])),
+                    "line_items": json.dumps(debit_note.get("line_items", [])),
+                    "cost_center_allocations": json.dumps(debit_note.get("cost_center_allocations", [])),
+                    "tally_guid": debit_note.get("tally_guid", ""),
+                    "company_name": "",
+                    "created_at": datetime.now().isoformat(),
+                    "updated_at": datetime.now().isoformat()
+                }
+                db_data_list.append(db_data)
+                
+            try:
+                database_manager.bulk_save_debit_notes(db_data_list)
+            except AttributeError:
+                pass
+                
+        os.unlink(temp_path)
+        
+        total_amount = sum(float(c.get("amount", 0)) for c in parsed_debit_notes)
+        return jsonify({"debit_notes": parsed_debit_notes, "total_amount": total_amount})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+@app.route('/api/debit_note/sync_zoho', methods=['POST'])
+def api_sync_debit_note():
+    try:
+        selected = request.json.get("debit_notes") if request.is_json else None
+        from_date = request.json.get("from_date", "20250401") if request.is_json else "20250401"
+        to_date = request.json.get("to_date", "20250430") if request.is_json else "20250430"
+        limit = request.json.get("limit") if request.is_json else None
+        
+        result = debit_note_module.sync_debit_note_to_zoho(selected, from_date, to_date, limit)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({"status": "error", "message": str(e)}), 500
+
+@app.route('/api/db/debit_notes', methods=['GET'])
+def api_db_debit_notes():
+    if not database_manager: return jsonify({"error": "DB Manager not loaded"}), 500
+    try:
+        c_rows = database_manager.get_all_debit_notes()
+        debit_notes = []
+        for r in c_rows:
+            d = dict(r)
+            if isinstance(d.get('ledger_entries'), str):
+                try: d['ledger_entries'] = json.loads(d['ledger_entries'])
+                except: d['ledger_entries'] = []
+            if isinstance(d.get('line_items'), str):
+                try: d['line_items'] = json.loads(d['line_items'])
+                except: d['line_items'] = []
+            if isinstance(d.get('cost_center_allocations'), str):
+                try: d['cost_center_allocations'] = json.loads(d['cost_center_allocations'])
+                except: d['cost_center_allocations'] = []
+            debit_notes.append(d)
+                
+        total_amount = sum(float(r.get('amount', 0) or 0) for r in debit_notes)
+        return jsonify({
+            "debit_notes": debit_notes,
+            "count": len(debit_notes),
+            "total_amount": total_amount
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/payments/split_expenses', methods=['POST'])
+def split_payments_expenses():
+    if not database_manager:
+        from flask import jsonify
+        return jsonify({"status": "error", "error": "Database manager not available"}), 500
+        
+    try:
+        from flask import request, jsonify
+        import json as _json
+
+        data = request.json or {}
+        payments = data.get('payments', [])
+        
+        conn = database_manager.get_db_connection()
+        cursor = conn.cursor()
+        
+        # Use SQL directly with COLLATE NOCASE to avoid Python string comparison issues
+        # Mark as Vendor Payment: vendor_name exists in ledgers with type='vendor'
+        cursor.execute("""
+            UPDATE payments_made 
+            SET voucher_type = 'Payment'
+            WHERE vendor_name IN (
+                SELECT pm.vendor_name FROM payments_made pm
+                INNER JOIN ledgers l ON LOWER(TRIM(pm.vendor_name)) = LOWER(TRIM(l.name)) COLLATE NOCASE
+                WHERE LOWER(l.type) = 'vendor'
+            )
+        """)
+        vendor_updated = cursor.rowcount
+
+        # Mark as Expense: vendor_name NOT in ledgers with type='vendor'
+        cursor.execute("""
+            UPDATE payments_made 
+            SET voucher_type = 'Expense'
+            WHERE vendor_name NOT IN (
+                SELECT pm.vendor_name FROM payments_made pm
+                INNER JOIN ledgers l ON LOWER(TRIM(pm.vendor_name)) = LOWER(TRIM(l.name)) COLLATE NOCASE
+                WHERE LOWER(l.type) = 'vendor'
+            )
+        """)
+        expense_updated = cursor.rowcount
+        conn.commit()
+        print(f" DB Update: {vendor_updated} vendor payments, {expense_updated} expenses")
+
+        # Re-read directly from DB after update - DB is the truth source
+        all_updated = cursor.execute(
+            "SELECT * FROM payments_made ORDER BY date DESC"
+        ).fetchall()
+        
+        vendor_payments = []
+        expenses = []
+        for row in all_updated:
+            r = dict(row)
+            # SQLite stores JSON arrays as strings, parse back to lists for frontend
+            for field in ['bill_allocations', 'ledger_entries', 'cost_center_allocations']:
+                if r.get(field):
+                    try:
+                        r[field] = _json.loads(r[field])
+                    except:
+                        r[field] = []
+                else:
+                    r[field] = []
+                    
+            if r.get('voucher_type', '').lower() == 'payment':
+                vendor_payments.append(r)
+            else:
+                expenses.append(r)
+                
+        conn.close()
+        return jsonify({
+            "status": "success",
+            "vendor_payments": vendor_payments,
+            "expenses": expenses,
+            "message": f"Split complete: {len(vendor_payments)} vendor payments, {len(expenses)} expenses"
+        })
+    except Exception as e:
+        import traceback
+        from flask import jsonify
+        traceback.print_exc()
+        return jsonify({"status": "error", "error": str(e)}), 500
+
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# OFFLINE MIGRATION TOOL — JSON Converter
+# ─────────────────────────────────────────────────────────────────────────────
+
+@app.route('/json-converter')
+def json_converter_page():
+    return render_template('json_converter.html')
+
+
+@app.route('/api/converter/parse-json', methods=['POST'])
+def api_converter_parse_json():
+    """
+    Accepts:
+      - json_file  (multipart) — Tally exported JSON
+      - excel_file (multipart, optional) — Zoho Books sample Excel/CSV
+
+    Returns JSON with:
+      detected_type, records, raw_fields, count, errors, sample_cols
+    """
+    try:
+        import importlib.util as _ilu
+        _conv_path = os.path.join(os.path.dirname(__file__), 'modules', 'json_to_zoho_converter.py')
+        _conv_spec = _ilu.spec_from_file_location('json_to_zoho_converter', _conv_path)
+        conv = _ilu.module_from_spec(_conv_spec)
+        _conv_spec.loader.exec_module(conv)
+
+        # ── JSON file ──────────────────────────────────────────────────
+        jf = request.files.get('json_file')
+        if not jf or not jf.filename:
+            return jsonify({"error": "json_file is required"}), 400
+
+        json_bytes = jf.read()
+
+        # ── Parse Tally JSON ───────────────────────────────────────────
+        result = conv.parse_tally_json(json_bytes)
+
+        # ── Excel sample (optional) ────────────────────────────────────
+        sample_cols = []
+        ef = request.files.get('excel_file')
+        if ef and ef.filename:
+            ef_bytes = ef.read()
+            ex_result = conv.parse_sample_excel(ef_bytes)
+            sample_cols = ex_result.get('columns', [])
+            if ex_result.get('error'):
+                result['errors'] = result.get('errors', []) + [
+                    f"Sample Excel warning: {ex_result['error']}"
+                ]
+
+        result['sample_cols'] = sample_cols
+
+        # Limit records returned (preview only — mapping uses all)
+        # We send all records (export needs them), but cap at 2000 to avoid huge JSON
+        MAX_RECORDS = 2000
+        if len(result['records']) > MAX_RECORDS:
+            result['errors'] = result.get('errors', []) + [
+                f"Showing first {MAX_RECORDS} of {len(result['records'])} records"
+            ]
+            result['records'] = result['records'][:MAX_RECORDS]
+
+        return jsonify(result)
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route('/api/converter/export', methods=['POST'])
+def api_converter_export():
+    """
+    Accepts JSON body:
+      {
+        "records":       [...],          # list of flat dicts (from parse step)
+        "field_mapping": {...},          # { zoho_col: tally_field }
+        "export_format": "xlsx" | "csv"
+      }
+
+    Returns: binary file download
+    """
+    try:
+        import io as _io
+        import importlib.util as _ilu
+        _conv_path = os.path.join(os.path.dirname(__file__), 'modules', 'json_to_zoho_converter.py')
+        _conv_spec = _ilu.spec_from_file_location('json_to_zoho_converter', _conv_path)
+        conv = _ilu.module_from_spec(_conv_spec)
+        _conv_spec.loader.exec_module(conv)
+        from flask import send_file
+
+        body = request.get_json(force=True)
+        if not body:
+            return jsonify({"error": "Request body is required"}), 400
+
+        records       = body.get('records', [])
+        field_mapping = body.get('field_mapping', {})
+        export_format = body.get('export_format', 'xlsx')
+
+        if not records:
+            return jsonify({"error": "No records to export"}), 400
+        if not field_mapping:
+            return jsonify({"error": "field_mapping is required"}), 400
+
+        file_bytes, mimetype, filename = conv.build_export(
+            records, field_mapping, export_format
+        )
+
+        return send_file(
+            _io.BytesIO(file_bytes),
+            mimetype=mimetype,
+            as_attachment=True,
+            download_name=filename
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({"error": str(e)}), 500
+
+
 if __name__ == '__main__':
-    print("🚀 Starting Tally Software Frontend...")
-    print("📍 URL: http://localhost:5000")
+    print(" Starting Tally Software Frontend...")
+    print(" URL: http://localhost:5000")
     app.run(debug=True, port=5000)
+

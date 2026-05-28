@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 try:
     import database_manager
 except ImportError:
-    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    print("️ Warning: Could not import database_manager. SQLite sync will be skipped.")
     database_manager = None
 
 # Load environment variables
@@ -209,7 +209,7 @@ def fetch_tally_bills(bill_number="11"):
             v_no = v.find('VOUCHERNUMBER')
             if v_no and v_no.text.strip() == bill_number:
                 vouchers.append(v)
-                print(f"[TALLY] ✓ Found bill #{bill_number}")
+                print(f"[TALLY]  Found bill #{bill_number}")
                 break
         
         if not vouchers:
@@ -987,7 +987,7 @@ def get_all_bills_data(from_date="20250401", to_date="20250430", limit=None):
 
             # Bulk-save to prevent 'database is locked' errors
             database_manager.bulk_save_bills(db_data_list)
-            print(f"💾 Saved {len(bills)} bills to database")
+            print(f" Saved {len(bills)} bills to database")
 
         # ----------------------------------------------------------------
         # Build return stats
@@ -1006,7 +1006,7 @@ def get_all_bills_data(from_date="20250401", to_date="20250430", limit=None):
         }
 
     except Exception as e:
-        print(f"❌ Error in get_all_bills_data: {e}")
+        print(f" Error in get_all_bills_data: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -1030,7 +1030,7 @@ def fetch_tally_bills_range(from_date="20250401", to_date="20250430", limit=None
     </STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"""
 
     try:
-        print(f"📥 Fetching bills from Tally ({from_date} to {to_date})...")
+        print(f" Fetching bills from Tally ({from_date} to {to_date})...")
         response = requests.post(TALLY_URL, data=xml_request, timeout=90)
         soup = BeautifulSoup(response.content, 'lxml-xml')
         
@@ -1200,11 +1200,11 @@ def fetch_tally_bills_range(from_date="20250401", to_date="20250430", limit=None
                 "total_amount": round(total_amount, 2)
             })
         
-        print(f"✅ Fetched {len(bill_data)} bill(s)")
+        print(f" Fetched {len(bill_data)} bill(s)")
         return bill_data
     
     except Exception as e:
-        print(f"❌ Error fetching Tally bills: {e}")
+        print(f" Error fetching Tally bills: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -1222,7 +1222,7 @@ def sync_bills_to_zoho(selected_bills=None, from_date="20250401", to_date="20250
     'Import Bills', avoiding a redundant Tally XML request.
     """
     try:
-        print("🚀 Starting Zoho Sync (Bills)...")
+        print(" Starting Zoho Sync (Bills)...")
 
         # Get access token
         token = get_access_token()
@@ -1244,7 +1244,7 @@ def sync_bills_to_zoho(selected_bills=None, from_date="20250401", to_date="20250
             bills_to_sync = selected_bills
             if limit and len(bills_to_sync) > limit:
                 bills_to_sync = bills_to_sync[:limit]
-            print(f"📊 Using {len(bills_to_sync)} selected bill(s) from frontend")
+            print(f" Using {len(bills_to_sync)} selected bill(s) from frontend")
 
         else:
             # 2. Try DB first (avoids second Tally port call)
@@ -1263,17 +1263,17 @@ def sync_bills_to_zoho(selected_bills=None, from_date="20250401", to_date="20250
                     if limit:
                         db_rows = db_rows[:limit]
                     bills_to_sync = db_rows
-                    print(f"📊 Loaded {len(bills_to_sync)} bill(s) from DB (no Tally call needed)")
+                    print(f" Loaded {len(bills_to_sync)} bill(s) from DB (no Tally call needed)")
 
             # 3. Fallback: hit Tally port if DB was empty
             if not bills_to_sync:
-                print("🔄 DB empty for range — fetching from Tally port as fallback...")
+                print(" DB empty for range — fetching from Tally port as fallback...")
                 bills_to_sync = fetch_tally_bills_range(from_date, to_date, limit)
 
         if not bills_to_sync:
             return {"status": "error", "message": "No bills to sync"}
 
-        print(f"📊 Syncing {len(bills_to_sync)} bill(s) to Zoho Books...")
+        print(f" Syncing {len(bills_to_sync)} bill(s) to Zoho Books...")
 
         stats = {"created": 0, "failed": 0, "errors": []}
 
@@ -1282,7 +1282,7 @@ def sync_bills_to_zoho(selected_bills=None, from_date="20250401", to_date="20250
                                       payment_terms_map, tax_map, tag_map)
             if result.get("success"):
                 stats["created"] += 1
-                print(f"✅ Synced Bill #{bill['bill_number']}")
+                print(f" Synced Bill #{bill['bill_number']}")
             else:
                 stats["failed"] += 1
                 stats["errors"].append({
@@ -1290,12 +1290,12 @@ def sync_bills_to_zoho(selected_bills=None, from_date="20250401", to_date="20250
                     "vendor":      bill['vendor_name'],
                     "error":       result.get("error", "Unknown error")
                 })
-                print(f"❌ Failed Bill #{bill['bill_number']}: {result.get('error')}")
+                print(f" Failed Bill #{bill['bill_number']}: {result.get('error')}")
 
         return {"status": "success", "stats": stats}
 
     except Exception as e:
-        print(f"❌ Error in sync_bills_to_zoho: {e}")
+        print(f" Error in sync_bills_to_zoho: {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -1344,3 +1344,110 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def parse_tally_json(json_path):
+    import json, re
+    try:
+        with open(json_path, 'r', encoding='utf-16') as f: data = json.load(f)
+    except:
+        with open(json_path, 'r', encoding='utf-8') as f: data = json.load(f)
+    if isinstance(data, list) and len(data) > 0 and 'date' in data[0]: return data
+    vouchers = data.get('tallymessage', [])
+    if isinstance(vouchers, dict): vouchers = [vouchers]
+    
+    bill_data = []
+    for v in vouchers:
+        if not isinstance(v, dict): continue
+        if 'vouchernumber' not in v and 'vouchertypename' not in v: continue
+        
+        v_date = str(v.get('date', '')).strip()
+        v_no = str(v.get('vouchernumber', '')).strip()
+        vendor_name = str(v.get('partyname', '')).strip()
+        narration = str(v.get('narration', '')).strip()
+        po_number = str(v.get('basicpurchaseorderno', '')).strip()
+        reference_number = str(v.get('reference', '')).strip()
+        
+        vendor_address = []
+        buyer_addr = v.get('basicbuyeraddress.list', v.get('basicbuyeraddress', []))
+        if not isinstance(buyer_addr, list): buyer_addr = [buyer_addr]
+        for addr in buyer_addr:
+            if isinstance(addr, dict) and 'basicbuyeraddress' in addr:
+                vendor_address.append(str(addr['basicbuyeraddress']).strip())
+            elif isinstance(addr, str): vendor_address.append(addr.strip())
+            
+        payment_terms = str(v.get('basicduedateofpymt', '')).strip()
+        if not payment_terms:
+            bill_allocs = v.get('billallocations.list', v.get('billallocations', []))
+            if not isinstance(bill_allocs, list): bill_allocs = [bill_allocs]
+            for ba in bill_allocs:
+                if isinstance(ba, dict) and ba.get('billcreditperiod'):
+                    payment_terms = str(ba['billcreditperiod']).strip()
+                    break
+
+        purchase_ledger = ""
+        inventory_entries = v.get('inventoryentries.list', v.get('inventoryentries', v.get('allinventoryentries.list', v.get('allinventoryentries', []))))
+        if not isinstance(inventory_entries, list): inventory_entries = [inventory_entries]
+        for item in inventory_entries:
+            if isinstance(item, dict) and item.get('ledgername'):
+                purchase_ledger = str(item['ledgername']).strip()
+                break
+
+        ledger_entries = v.get('ledgerentries.list', v.get('ledgerentries', v.get('allledgerentries.list', v.get('allledgerentries', []))))
+        if not isinstance(ledger_entries, list): ledger_entries = [ledger_entries]
+        
+        if not purchase_ledger:
+            max_neg = 0
+            for entry in ledger_entries:
+                if not isinstance(entry, dict): continue
+                lname = str(entry.get('ledgername', '')).strip()
+                amt_str = str(entry.get('amount', '0'))
+                nums = re.findall(r'[-\d.]+', amt_str)
+                amt = float(nums[-1]) if nums else 0.0
+                lname_lower = lname.lower()
+                if lname == vendor_name or 'cgst' in lname_lower or 'sgst' in lname_lower or 'igst' in lname_lower or 'rounding' in lname_lower: continue
+                if amt < max_neg: max_neg = amt; purchase_ledger = lname
+
+        line_items = []
+        for item in inventory_entries:
+            if not isinstance(item, dict): continue
+            item_name = str(item.get('stockitemname', '')).strip()
+            quantity = str(item.get('actualqty', item.get('billedqty', '0'))).strip()
+            rate_str = str(item.get('rate', '0')).split('/')[0].strip()
+            nums = re.findall(r'[-\d.]+', rate_str)
+            rate = float(nums[-1]) if nums else 0.0
+            discount = str(item.get('discount', '0')).strip()
+            amt_str = str(item.get('amount', '0')).strip()
+            nums = re.findall(r'[-\d.]+', amt_str)
+            amount = float(nums[-1]) if nums else 0.0
+            
+            cat_alloc = item.get('categoryallocations.list', item.get('categoryallocations', {}))
+            if isinstance(cat_alloc, list) and len(cat_alloc) > 0: cat_alloc = cat_alloc[0]
+            category = str(cat_alloc.get('category', '')).strip() if isinstance(cat_alloc, dict) else ""
+            
+            cost_centre = ""
+            if isinstance(cat_alloc, dict):
+                cc_alloc = cat_alloc.get('costcentreallocations.list', cat_alloc.get('costcentreallocations', {}))
+                if isinstance(cc_alloc, list) and len(cc_alloc) > 0: cc_alloc = cc_alloc[0]
+                cost_centre = str(cc_alloc.get('name', '')).strip() if isinstance(cc_alloc, dict) else ""
+
+            line_items.append({"item_name": item_name, "quantity": quantity, "rate": rate, "discount": discount, "amount": abs(amount), "category": category, "cost_centre": cost_centre})
+
+        taxes = []; rounding_off = 0.0
+        for entry in ledger_entries:
+            if not isinstance(entry, dict): continue
+            lname = str(entry.get('ledgername', '')).strip()
+            amt_str = str(entry.get('amount', '0'))
+            nums = re.findall(r'[-\d.]+', amt_str)
+            amt = float(nums[-1]) if nums else 0.0
+            lname_lower = lname.lower()
+            if ('cgst' in lname_lower or 'sgst' in lname_lower or 'igst' in lname_lower) and 'input' in lname_lower:
+                tax_rate = ""
+                if '%' in lname: tax_rate = lname.split('%')[0].split()[-1]
+                tax_type = "CGST" if 'cgst' in lname_lower else ("SGST" if 'sgst' in lname_lower else "IGST")
+                taxes.append({"tax_name": lname, "tax_type": tax_type, "tax_rate": tax_rate, "tax_amount": abs(amt)})
+            elif 'rounding' in lname_lower: rounding_off = amt
+                
+        bill_data.append({"date": v_date, "bill_number": v_no, "vendor_name": vendor_name, "po_number": po_number, "reference_number": reference_number, "vendor_address": vendor_address, "payment_terms": payment_terms, "purchase_ledger": purchase_ledger, "line_items": line_items, "taxes": taxes, "rounding_off": rounding_off, "narration": narration})
+    return bill_data
+

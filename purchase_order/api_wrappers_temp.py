@@ -28,7 +28,7 @@ def get_all_purchase_orders_data(from_date="20250401", to_date="20250430", limit
             }
         }
     except Exception as e:
-        print(f"❌ Error in get_all_purchase_orders_data: {e}")
+        print(f" Error in get_all_purchase_orders_data: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -52,7 +52,7 @@ def fetch_tally_purchase_orders_range(from_date="20250401", to_date="20250430", 
     </STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"""
 
     try:
-        print(f"📥 Fetching purchase orders from Tally ({from_date} to {to_date})...")
+        print(f" Fetching purchase orders from Tally ({from_date} to {to_date})...")
         response = requests.post(TALLY_URL, data=xml_request, timeout=90)
         soup = BeautifulSoup(response.content, 'lxml-xml')
         
@@ -227,11 +227,11 @@ def fetch_tally_purchase_orders_range(from_date="20250401", to_date="20250430", 
                 "total_amount": round(total_amount, 2)
             })
         
-        print(f"✅ Fetched {len(purchase_order_data)} purchase order(s)")
+        print(f" Fetched {len(purchase_order_data)} purchase order(s)")
         return purchase_order_data
     
     except Exception as e:
-        print(f"❌ Error fetching Tally purchase orders: {e}")
+        print(f" Error fetching Tally purchase orders: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -247,7 +247,7 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
         limit: Maximum number of purchase orders to sync
     """
     try:
-        print("🚀 Starting Zoho Sync (Purchase Orders)...")
+        print(" Starting Zoho Sync (Purchase Orders)...")
         
         # Get access token
         token = get_access_token()
@@ -273,7 +273,7 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
         if not orders_to_sync:
             return {"status": "error", "message": "No purchase orders to sync"}
         
-        print(f"📊 Syncing {len(orders_to_sync)} purchase order(s) to Zoho Books...")
+        print(f" Syncing {len(orders_to_sync)} purchase order(s) to Zoho Books...")
         
         stats = {"created": 0, "failed": 0, "errors": []}
         
@@ -281,7 +281,7 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
             result = create_zoho_purchase_order(token, po, contact_map, account_map, payment_terms_map, tax_map, tag_map, item_map)
             if result.get("success"):
                 stats["created"] += 1
-                print(f"✅ Synced Purchase Order #{po['purchase_order_number']}")
+                print(f" Synced Purchase Order #{po['purchase_order_number']}")
             else:
                 stats["failed"] += 1
                 stats["errors"].append({
@@ -289,10 +289,10 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
                     "vendor": po['vendor_name'],
                     "error": result.get("error", "Unknown error")
                 })
-                print(f"❌ Failed Purchase Order #{po['purchase_order_number']}")
+                print(f" Failed Purchase Order #{po['purchase_order_number']}")
         
         return {"status": "success", "stats": stats}
         
     except Exception as e:
-        print(f"❌ Error in sync_purchase_orders_to_zoho: {e}")
+        print(f" Error in sync_purchase_orders_to_zoho: {e}")
         return {"status": "error", "message": str(e)}

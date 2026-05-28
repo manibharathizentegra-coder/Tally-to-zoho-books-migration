@@ -149,7 +149,7 @@ if __name__ == "__main__":
     if choice == "2":
         from_date = "20250401"
         to_date = "20250430"
-        print("⚠️  Warning: Full month may take longer or timeout if too many journals exist")
+        print("️  Warning: Full month may take longer or timeout if too many journals exist")
     elif choice == "3":
         from_date = input("Enter FROM date (YYYYMMDD, e.g., 20250401): ").strip()
         to_date = input("Enter TO date (YYYYMMDD, e.g., 20250407): ").strip()

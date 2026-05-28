@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,23 +8,29 @@
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
     
-    <style>
-        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
-        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
-        
-        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
-        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
-        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-
-        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
-        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
-    </style>
+    {% include '_sidebar_styles.html' %}
+    {% include '_zb_theme.html' %}
 </head>
 <body>
+    {% set active_page = 'invoices' %}
+    <div class="app-shell">
+        {% include '_sidebar.html' %}
+        <main class="main">
+            {% set page_title = 'Invoices' %}
+            {% set page_subtitle = 'Import invoices and sync them to Zoho with item/ledger mapping.' %}
+            {% include '_topbar.html' %}
+
+            {% set steps_title = 'Invoices: Recommended Steps' %}
+            {% set steps = [
+              'Confirm Ledgers + Items are already synced to Zoho.',
+              'Import invoice XML into the active DB.',
+              'Preview the first 2-3 invoices for item/ledger mapping.',
+              'Sync to Zoho and download the error report if any.'
+            ] %}
+            {% include '_steps_card.html' %}
+
+
 
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
@@ -73,6 +79,12 @@
                     <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
                 </li>
                 <li class="nav-item me-3">
+                    <a class="nav-link" href="/credit_note"><i class="bi bi-file-earmark-minus me-1"></i> Credit Note</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/debit_note"><i class="bi bi-file-earmark-plus me-1"></i> Debit Note</a>
+                </li>
+                <li class="nav-item me-3">
                     <a class="nav-link" href="/sales_orders">
                         <i class="bi bi-cart-check me-1"></i> Sales Orders
                     </a>
@@ -91,7 +103,7 @@
         </div>
     </nav>
 
-    <div class="container-fluid py-4 px-4">
+    <div class="container-fluid p-0">
         
         <!-- HEADER & ACTIONS -->
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -106,7 +118,12 @@
                 <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
                     <i class="bi bi-arrow-repeat me-2"></i> Sync All to Zoho
                 </button>
-                <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
+                
+                <input type="file" id="jsonUpload" accept=".json" style="display: none;" onchange="uploadJson(event)">
+                <button onclick="document.getElementById('jsonUpload').click()" class="btn btn-outline-success d-flex align-items-center">
+                    <i class="bi bi-upload me-2"></i> Upload JSON
+                </button>
+<button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
                     <i class="bi bi-cloud-download me-2"></i> Import Invoices
                 </button>
             </div>
@@ -235,22 +252,30 @@
     </div>
 
     <!-- SCRIPTS -->
+        </div>
+      </main>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let allInvoices = [];
         let stats = {};
 
-        // Load data on startup — priority: localStorage → DB → empty
+        // Load data on startup - priority: localStorage (only if non-empty) -> DB -> empty
         document.addEventListener('DOMContentLoaded', async () => {
             const cached = localStorage.getItem('invoicesData');
             if (cached) {
                 try {
                     const data = JSON.parse(cached);
-                    allInvoices = data.invoices || [];
-                    stats       = data.stats   || {};
-                    updateKPIs(stats);
-                    renderInvoices(allInvoices);
-                    return;
+                    const cachedInvoices = data.invoices || [];
+                    if (Array.isArray(cachedInvoices) && cachedInvoices.length > 0) {
+                        allInvoices = cachedInvoices;
+                        stats       = data.stats || {};
+                        updateKPIs(stats);
+                        renderInvoices(allInvoices);
+                        return;
+                    }
+                    localStorage.removeItem('invoicesData');
                 } catch(e) {
                     localStorage.removeItem('invoicesData');
                 }
@@ -362,11 +387,11 @@
                 
                 if (data.status === 'success') {
                     const total = data.stats.created + data.stats.failed;
-                    let msg = '✅ Zoho Sync Complete!\n\n';
+                    let msg = 'Zoho Sync Complete!\n\n';
                     msg += `📊 Summary:\n`;
                     msg += `  Total Invoices: ${total}\n`;
-                    msg += `  ✅ Successfully Created: ${data.stats.created}\n`;
-                    msg += `  ❌ Failed: ${data.stats.failed}\n\n`;
+                    msg += `  Created: ${data.stats.created}\n`;
+                    msg += `  Failed: ${data.stats.failed}\n\n`;
                     
                     if (data.stats.created > 0) {
                         msg += `${data.stats.created} invoice(s) have been created in Zoho Books!\n\n`;
@@ -374,7 +399,7 @@
                     
                     // Show detailed error messages
                     if (data.stats.failed > 0 && data.stats.errors && data.stats.errors.length > 0) {
-                        msg += `⚠️ Failed Invoices:\n`;
+                        msg += `Failed Invoices:\n`;
                         msg += `${'='.repeat(50)}\n`;
                         data.stats.errors.forEach((err, idx) => {
                             msg += `${idx + 1}. Invoice: ${err.invoice_number}\n`;
@@ -385,7 +410,7 @@
                     
                     alert(msg);
                 } else {
-                    alert('❌ Sync Error: ' + data.message);
+                    alert('Sync Error: ' + data.message);
                 }
             } catch (err) {
                 console.error(err);
@@ -423,14 +448,14 @@
                 
                 if (data.status === 'success') {
                     const total = data.stats.created + data.stats.failed;
-                    let msg = '✅ Month Sync Complete!\n\n';
+                    let msg = 'Month Sync Complete!\n\n';
                     msg += `📊 Summary:\n`;
                     msg += `  Total Invoices Processed: ${total}\n`;
-                    msg += `  ✅ Successfully Created: ${data.stats.created}\n`;
-                    msg += `  ❌ Failed: ${data.stats.failed}\n\n`;
+                    msg += `  Created: ${data.stats.created}\n`;
+                    msg += `  Failed: ${data.stats.failed}\n\n`;
                     
                     if (data.stats.failed > 0 && data.stats.errors && data.stats.errors.length > 0) {
-                        msg += `⚠️ Failed Invoices:\n`;
+                        msg += `Failed Invoices:\n`;
                         msg += `${'='.repeat(50)}\n`;
                         data.stats.errors.forEach((err, idx) => {
                             msg += `${idx + 1}. Invoice: ${err.invoice_number}\n`;
@@ -440,7 +465,7 @@
                     }
                     alert(msg);
                 } else {
-                    alert('❌ Sync Error: ' + data.message);
+                    alert('Sync Error: ' + data.message);
                 }
             } catch (err) {
                 console.error(err);
@@ -675,14 +700,14 @@
 
                 if (data.status === 'success') {
                     const total = data.stats.created + data.stats.failed;
-                    let msg = '✅ Insert Complete!\n\n';
+                    let msg = 'Insert Complete!\n\n';
                     msg += `📊 Summary:\n`;
                     msg += `  Total Selected: ${total}\n`;
-                    msg += `  ✅ Successfully Created: ${data.stats.created}\n`;
-                    msg += `  ❌ Failed: ${data.stats.failed}\n\n`;
+                    msg += `  Created: ${data.stats.created}\n`;
+                    msg += `  Failed: ${data.stats.failed}\n\n`;
 
                     if (data.stats.failed > 0 && data.stats.errors && data.stats.errors.length > 0) {
-                        msg += `⚠️ Failed Invoices:\n`;
+                        msg += `Failed Invoices:\n`;
                         msg += `${'='.repeat(50)}\n`;
                         data.stats.errors.forEach((err, idx) => {
                             msg += `${idx + 1}. Invoice: ${err.invoice_number}\n`;
@@ -694,7 +719,7 @@
                     // Uncheck all after insert
                     selectAllVisible(false);
                 } else {
-                    alert('❌ Insert Error: ' + data.message);
+                    alert('Insert Error: ' + data.message);
                 }
             } catch (err) {
                 console.error(err);
@@ -705,6 +730,44 @@
                 updateSelectionUI();
             }
         }
-    </script>
+    
+        // Upload JSON Function
+        async function uploadJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const uploadBtn = event.target.nextElementSibling || document.querySelector('button[onclick="document.getElementById(\'jsonUpload\').click()"]');
+            const originalText = uploadBtn.innerHTML;
+            uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+            uploadBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/invoice/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (response.ok) {
+                    allInvoices = result.data || result.invoices || result.bills || result.receipts || result.sales_orders || result.purchase_orders || result.journals || [];
+                    localStorage.setItem('allInvoices', JSON.stringify(allInvoices));
+                    alert(result.message || 'JSON uploaded successfully!');
+                    renderInvoices();
+                } else {
+                    alert('Error uploading JSON: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to upload JSON file. See console for details.');
+            } finally {
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+                event.target.value = ''; // Reset file input
+            }
+        }
+        </script>
 </body>
 </html>

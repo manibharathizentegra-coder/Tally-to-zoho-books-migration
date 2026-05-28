@@ -1,0 +1,915 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Offline Migration Tool — Tally to Zoho Books</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  
+  {% include '_sidebar_styles.html' %}
+    {% include '_zb_theme.html' %}
+  <link href="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/css/tom-select.bootstrap5.min.css" rel="stylesheet">
+  {% include '_sidebar_styles.html' %}
+</head>
+<body>
+{% set active_page = 'json_converter' %}
+<div class="app-shell">
+  {% include '_sidebar.html' %}
+  <main class="main">
+    {% set page_title = 'JSON Converter' %}
+    {% set page_subtitle = 'Convert Tally XML exports into JSON and prepare mappings.' %}
+    {% include '_topbar.html' %}
+
+    {% set steps_title = 'JSON Converter: Recommended Steps' %}
+    {% set steps = [
+      'Upload the Tally XML export file.',
+      'Choose the required conversion type (Master/Vouchers/Stock as per workflow).',
+      'Download the converted JSON and use it in the mapping screens.'
+    ] %}
+    {% include '_steps_card.html' %}
+
+<!-- ════ NAVBAR ════ -->
+<nav class="navbar navbar-expand-lg navbar-light px-4 sticky-top">
+  <a class="navbar-brand d-flex align-items-center" href="/">
+    <i class="bi bi-wallet2 text-primary fs-4 me-2"></i>
+    <span>TallySoft</span>
+  </a>
+  <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navMenu">
+    <span class="navbar-toggler-icon"></span>
+  </button>
+  <div class="collapse navbar-collapse ms-3" id="navMenu">
+    <ul class="navbar-nav me-auto flex-wrap gap-1">
+      <li class="nav-item"><a class="nav-link" href="/ledgers"><i class="bi bi-journal-text me-1"></i>Ledgers</a></li>
+      <li class="nav-item"><a class="nav-link" href="/items"><i class="bi bi-box-seam me-1"></i>Items</a></li>
+      <li class="nav-item"><a class="nav-link" href="/journals"><i class="bi bi-journal-bookmark me-1"></i>Journals</a></li>
+      <li class="nav-item"><a class="nav-link" href="/invoices"><i class="bi bi-receipt me-1"></i>Invoices</a></li>
+      <li class="nav-item"><a class="nav-link" href="/bills"><i class="bi bi-file-earmark-text me-1"></i>Bills</a></li>
+      <li class="nav-item"><a class="nav-link" href="/receipts"><i class="bi bi-cash-coin me-1"></i>Receipts</a></li>
+      <li class="nav-item"><a class="nav-link" href="/payments_made"><i class="bi bi-cash-stack me-1"></i>Payments</a></li>
+      <li class="nav-item"><a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i>Contra</a></li>
+      <li class="nav-item"><a class="nav-link" href="/credit_note"><i class="bi bi-file-earmark-minus me-1"></i>Credit Note</a></li>
+      <li class="nav-item"><a class="nav-link" href="/debit_note"><i class="bi bi-file-earmark-plus me-1"></i>Debit Note</a></li>
+      <li class="nav-item"><a class="nav-link" href="/sales_orders"><i class="bi bi-cart-check me-1"></i>Sales Orders</a></li>
+      <li class="nav-item"><a class="nav-link" href="/purchase_orders"><i class="bi bi-bag-check me-1"></i>Purchase Orders</a></li>
+      <li class="nav-item"><a class="nav-link" href="/opening-balance"><i class="bi bi-bank me-1"></i>Opening Balance</a></li>
+      <li class="nav-item"><a class="nav-link active" href="/json-converter"><i class="bi bi-shuffle me-1"></i>Offline Converter</a></li>
+    </ul>
+  </div>
+</nav>
+
+<!-- ════ MAIN ════ -->
+<div class="container-fluid p-0" style="max-width: 1400px;">
+
+  <!-- HERO -->
+  <div class="page-hero">
+    <div class="hero-badge"><i class="bi bi-lightning-charge-fill me-1"></i> Offline — No Timeout</div>
+    <h1><i class="bi bi-shuffle me-2"></i>Offline Migration Tool</h1>
+    <p>Export JSON from Tally Prime → Import here → Map fields like Zoho Books → Download ready-to-import file. <br>No live API calls — zero timeout risk for migration teams.</p>
+  </div>
+
+  <!-- STEPPER -->
+  <div class="stepper" id="stepper">
+    <div class="step-item active" id="stepItem1">
+      <div class="step-num">1</div>
+      <div class="step-info">
+        <p class="step-title">Upload Files</p>
+        <p class="step-sub">Tally JSON + Sample Excel</p>
+      </div>
+    </div>
+    <div class="step-item" id="stepItem2">
+      <div class="step-num">2</div>
+      <div class="step-info">
+        <p class="step-title">Preview & Detect</p>
+        <p class="step-sub">Review parsed data</p>
+      </div>
+    </div>
+    <div class="step-item" id="stepItem3">
+      <div class="step-num">3</div>
+      <div class="step-info">
+        <p class="step-title">Field Mapping</p>
+        <p class="step-sub">Map Tally → Zoho columns</p>
+      </div>
+    </div>
+    <div class="step-item" id="stepItem4">
+      <div class="step-num">4</div>
+      <div class="step-info">
+        <p class="step-title">Export</p>
+        <p class="step-sub">Download Zoho-ready file</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- HOW TO EXPORT FROM TALLY -->
+  <div class="instruction-box mb-4">
+    <h6><i class="bi bi-lightbulb-fill me-2"></i>How to Export JSON from Tally Prime</h6>
+    <ol>
+      <li>Open <strong>Tally Prime</strong> → Go to <strong>Gateway of Tally</strong></li>
+      <li>Press <strong>Alt+E</strong> or select <strong>Export</strong> from the top menu</li>
+      <li>Choose the data type: Vouchers / Ledgers / Stock Items / etc.</li>
+      <li>Select <strong>Format: JSON</strong> from the export options</li>
+      <li>Set the date range and click <strong>Export</strong> — save the <code>.json</code> file</li>
+      <li>Upload that JSON file below (Step 1)</li>
+    </ol>
+  </div>
+
+  <!-- ── STEP 1: UPLOAD ── -->
+  <div class="row g-4" id="step1Section">
+    <div class="col-lg-6">
+      <div class="card-panel">
+        <h5><i class="bi bi-filetype-json"></i> Step 1A: Upload Tally JSON or XML</h5>
+        <div class="upload-zone" id="jsonZone" ondragover="onDrag(event,'jsonZone')" ondragleave="offDrag('jsonZone')" ondrop="onDrop(event,'json')">
+          <input type="file" id="jsonFileInput" accept=".json,.xml" onchange="handleFileSelect(event,'json')">
+          <div class="uz-icon"><i class="bi bi-file-earmark-code"></i></div>
+          <div class="uz-title">Drop your Tally JSON or XML</div>
+          <div class="uz-sub">or click to browse — .json or .xml files</div>
+          <div id="jsonFileBadge" style="display:none;" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-lg-6">
+      <div class="card-panel">
+        <h5><i class="bi bi-file-earmark-excel"></i> Step 1B: Upload Zoho Sample Excel <small class="text-muted fw-normal">(optional)</small></h5>
+        <p style="font-size:12px; color:var(--muted); margin-bottom:14px;">
+          Export a sample file from <strong>Zoho Books → Import</strong> (download the sample template).
+          This auto-fills the field mapping with the exact column names Zoho expects.
+        </p>
+        <div class="upload-zone" id="excelZone" ondragover="onDrag(event,'excelZone')" ondragleave="offDrag('excelZone')" ondrop="onDrop(event,'excel')">
+          <input type="file" id="excelFileInput" accept=".xlsx,.xls,.csv" onchange="handleFileSelect(event,'excel')">
+          <div class="uz-icon"><i class="bi bi-table"></i></div>
+          <div class="uz-title">Drop Zoho Sample Excel / CSV</div>
+          <div class="uz-sub">or click to browse — .xlsx / .xls / .csv</div>
+          <div id="excelFileBadge" style="display:none;" class="mt-2"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="col-12 d-flex justify-content-center">
+      <button class="btn-primary-custom" id="parseBtn" onclick="parseFiles()" disabled>
+        <i class="bi bi-play-circle-fill"></i> Parse & Preview
+      </button>
+    </div>
+  </div>
+
+  <!-- ── STEP 2: PREVIEW ── -->
+  <div class="feature-section" id="step2Section">
+    <div class="card-panel">
+      <div class="d-flex justify-content-between align-items-start flex-wrap gap-3 mb-4">
+        <h5 class="mb-0"><i class="bi bi-eye"></i> Step 2: Data Preview</h5>
+        <div class="d-flex align-items-center gap-3">
+          <div class="detect-pill" id="typePill">
+            <i class="bi bi-tag-fill"></i> <span id="typePillText">generic</span>
+          </div>
+          <div class="d-flex gap-3 flex-wrap">
+            <div class="stat-chip"><span class="val" id="statCount">0</span><span class="lbl">Records</span></div>
+            <div class="stat-chip"><span class="val" id="statFields">0</span><span class="lbl">Fields</span></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Override type -->
+      <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+        <label class="fw-600" style="font-size:13px; font-weight:600;">Override detected type:</label>
+        <select id="typeOverride" class="form-select form-select-sm" style="max-width:220px;" onchange="onTypeOverride()">
+          <option value="invoices">Invoices (Sales)</option>
+          <option value="bills">Bills (Purchases)</option>
+          <option value="journals">Journals</option>
+          <option value="payments_made">Payments Made</option>
+          <option value="receipts">Receipts (Payment Received)</option>
+          <option value="sales_orders">Sales Orders</option>
+          <option value="purchase_orders">Purchase Orders</option>
+          <option value="credit_notes">Credit Notes</option>
+          <option value="debit_notes">Debit Notes</option>
+          <option value="contacts">Contacts / Ledgers</option>
+          <option value="items">Items / Products</option>
+          <option value="generic">Generic</option>
+        </select>
+        <button class="btn-outline-custom" onclick="goToMapping()" style="padding:7px 16px; font-size:13px;">
+          <i class="bi bi-arrow-right-circle"></i> Proceed to Field Mapping
+        </button>
+      </div>
+
+      <!-- Errors -->
+      <div id="parseErrors" style="display:none;" class="alert alert-warning mb-3" role="alert"></div>
+
+      <!-- Preview table -->
+      <div id="previewSection">
+        <div class="preview-scroll">
+          <table class="table table-sm table-hover mb-0">
+            <thead><tr id="previewHeader"></tr></thead>
+            <tbody id="previewBody"></tbody>
+          </table>
+        </div>
+        <p class="text-muted mt-2" style="font-size:11px;">Showing first 10 rows. All fields are available for mapping.</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 3: FIELD MAPPING ── -->
+  <div class="feature-section" id="step3Section">
+    <div class="card-panel">
+      <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+        <h5 class="mb-0"><i class="bi bi-diagram-3"></i> Step 3: Field Mapping</h5>
+        <div class="d-flex gap-2 flex-wrap">
+          <button class="btn btn-sm btn-outline-secondary" onclick="autoMap()"><i class="bi bi-magic me-1"></i>Auto-Map</button>
+          <button class="btn btn-sm btn-outline-danger"  onclick="clearMap()"><i class="bi bi-x-circle me-1"></i>Clear All</button>
+        </div>
+      </div>
+
+      <p style="font-size:13px; color:var(--muted);" class="mb-3">
+        For each <strong>Zoho Books column</strong> (left), choose which <strong>Tally field</strong> (right) should fill it.
+        Select <em>— Literal value —</em> to type a fixed value for all rows.
+        Unmapped columns will be left blank.
+      </p>
+
+      <!-- Mapped from sample banner -->
+      <div id="sampleMappedBanner" style="display:none;" class="alert alert-success py-2 mb-3">
+        <i class="bi bi-check-circle-fill me-2"></i>
+        Zoho column list loaded from your uploaded sample Excel. Mapping suggestions applied automatically.
+      </div>
+
+      <!-- Field search -->
+      <input type="text" id="fieldSearch" placeholder="🔍  Search Zoho fields…" oninput="filterMappingRows()" />
+
+      <!-- Mapping table -->
+      <div style="max-height: 520px; overflow-y: auto; border-radius: 10px; border: 1px solid var(--border);">
+        <table class="mapping-table">
+          <thead>
+            <tr>
+              <th style="width:36px;">#</th>
+              <th style="width:42%;">Zoho Books Column</th>
+              <th>Tally Field / Value</th>
+              <th style="width:120px;">Literal Value</th>
+              <th style="width:60px; text-align:center;">Status</th>
+            </tr>
+          </thead>
+          <tbody id="mappingBody"></tbody>
+        </table>
+      </div>
+
+      <div class="d-flex justify-content-between align-items-center mt-4 flex-wrap gap-3">
+        <div class="text-muted" style="font-size:12px;">
+          <span id="mappedCount" class="fw-bold text-success">0</span> of
+          <span id="totalMapped">0</span> fields mapped
+        </div>
+        <div class="d-flex gap-2">
+          <button class="btn-outline-custom" onclick="showSection('step2Section',2)">
+            <i class="bi bi-arrow-left"></i> Back
+          </button>
+          <button class="btn-primary-custom" onclick="goToExport()">
+            <i class="bi bi-arrow-right-circle-fill"></i> Preview Export
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── STEP 4: EXPORT ── -->
+  <div class="feature-section" id="step4Section">
+    <div class="card-panel">
+      <h5><i class="bi bi-cloud-download"></i> Step 4: Export Zoho-Ready File</h5>
+
+      <div id="exportPreviewSection">
+        <p style="font-size:13px; color:var(--muted);" class="mb-3">
+          Review mapping summary, choose format, and download your file.
+        </p>
+
+        <!-- Mapping summary -->
+        <div class="row g-3 mb-4" id="exportStats">
+          <div class="col-auto"><div class="stat-chip"><span class="val" id="expRecords">0</span><span class="lbl">Records</span></div></div>
+          <div class="col-auto"><div class="stat-chip"><span class="val" id="expMapped">0</span><span class="lbl">Columns Mapped</span></div></div>
+          <div class="col-auto"><div class="stat-chip"><span class="val" id="expType">—</span><span class="lbl">Module</span></div></div>
+        </div>
+
+        <!-- Contacts Filter (only visible if contacts) -->
+        <div id="contactsFilterSection" style="display:none;" class="mb-4">
+          <label class="fw-bold" style="font-size:13px;">Which ledgers do you want to export?</label>
+          <select id="exportFilter" class="form-select mt-2" style="max-width:300px;">
+            <option value="all">All Ledgers</option>
+            <option value="Customer">Only Customers (Debtors)</option>
+            <option value="Vendor">Only Vendors (Creditors)</option>
+            <option value="Other Account">Only Other Accounts (Chart of Accounts)</option>
+          </select>
+
+          <div class="mt-3" style="max-width:520px;">
+            <label class="fw-bold" style="font-size:13px;">Pick specific ledger(s) (optional)</label>
+            <select id="ledgerNameFilter" multiple placeholder="Search ledger name..." autocomplete="off"></select>
+            <div class="text-muted mt-1" style="font-size:12px;">If you select any names here, only those ledgers are exported.</div>
+          </div>
+        </div>
+
+        <!-- Mapped fields list -->
+        <div class="mb-4">
+          <p class="fw-bold" style="font-size:13px; margin-bottom:8px;">Active Mappings:</p>
+          <div id="mappingSummaryList" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+        </div>
+
+        <!-- Format selector -->
+        <div class="d-flex align-items-center gap-3 mb-4 flex-wrap">
+          <label class="fw-bold" style="font-size:13px;">Export Format:</label>
+          <div class="d-flex gap-3">
+            <label class="d-flex align-items-center gap-2" style="cursor:pointer; font-size:13px;">
+              <input type="radio" name="exportFmt" value="xlsx" checked> Excel (.xlsx) <span class="badge bg-success ms-1">Recommended</span>
+            </label>
+            <label class="d-flex align-items-center gap-2" style="cursor:pointer; font-size:13px;">
+              <input type="radio" name="exportFmt" value="csv"> CSV (.csv)
+            </label>
+          </div>
+        </div>
+
+        <div class="d-flex gap-3 flex-wrap">
+          <button class="btn-outline-custom" onclick="showSection('step3Section',3)">
+            <i class="bi bi-arrow-left"></i> Back to Mapping
+          </button>
+          <button class="btn-success-custom" id="downloadBtn" onclick="doExport()">
+            <i class="bi bi-download"></i> Download File
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div><!-- /container -->
+
+<!-- TOAST CONTAINER -->
+<div class="toast-wrap" id="toastWrap"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/tom-select@2.2.2/dist/js/tom-select.complete.min.js"></script>
+<script>
+/* ═══════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════ */
+let jsonFile    = null;
+let excelFile   = null;
+let parsedData  = null;   // result from /api/converter/parse-json
+let sampleCols  = [];     // columns from Zoho sample Excel
+let currentType = "generic";
+let rawFields   = [];
+let currentMapping = {};  // { zoho_col: tally_field }
+let ledgerNameTom = null; // TomSelect instance for ledger name filter (contacts only)
+
+/* ═══════════════════════════════════════════════════════════════
+   DRAG & DROP
+═══════════════════════════════════════════════════════════════ */
+function onDrag(e, zoneId)  { e.preventDefault(); document.getElementById(zoneId).classList.add('drag-over'); }
+function offDrag(zoneId)    { document.getElementById(zoneId).classList.remove('drag-over'); }
+function onDrop(e, type)    {
+  e.preventDefault();
+  const zoneId = type === 'json' ? 'jsonZone' : 'excelZone';
+  offDrag(zoneId);
+  const f = e.dataTransfer.files[0];
+  if (f) processFile(f, type);
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FILE HANDLING
+═══════════════════════════════════════════════════════════════ */
+function handleFileSelect(event, type) {
+  const f = event.target.files[0];
+  if (f) processFile(f, type);
+}
+
+function processFile(f, type) {
+  if (type === 'json') {
+    const lowerName = (f && f.name ? f.name.toLowerCase() : '');
+    if (!lowerName.endsWith('.json') && !lowerName.endsWith('.xml')) { toast('Please upload a .json or .xml file', 'error'); return; }
+    jsonFile = f;
+    setBadge('jsonFileBadge', f.name, true);
+    document.getElementById('jsonZone').classList.add('uploaded');
+  } else {
+    excelFile = f;
+    setBadge('excelFileBadge', f.name, true);
+    document.getElementById('excelZone').classList.add('uploaded');
+  }
+  updateParseBtn();
+}
+
+function setBadge(elemId, name, success=false) {
+  const el = document.getElementById(elemId);
+  el.style.display = 'block';
+  el.innerHTML = `<div class="file-badge ${success?'success':''}">
+    <i class="bi bi-${success?'check-circle-fill':'file'}"></i> ${name}
+  </div>`;
+}
+
+function updateParseBtn() {
+  document.getElementById('parseBtn').disabled = !jsonFile;
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PARSE
+═══════════════════════════════════════════════════════════════ */
+async function parseFiles() {
+  const btn = document.getElementById('parseBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Parsing…';
+
+  try {
+    const fd = new FormData();
+    fd.append('json_file', jsonFile);
+    if (excelFile) fd.append('excel_file', excelFile);
+
+    const res  = await fetch('/api/converter/parse-json', { method: 'POST', body: fd });
+    const data = await res.json();
+
+    if (data.error) { toast('Parse error: ' + data.error, 'error'); return; }
+
+    parsedData   = data;
+    currentType  = data.detected_type || 'generic';
+    rawFields    = data.raw_fields    || [];
+    sampleCols   = data.sample_cols   || [];
+
+    // Build ledger-name picker (Contacts / Ledger masters only)
+    setupLedgerNameFilter(parsedData, currentType);
+
+    renderPreview(data);
+    showSection('step2Section', 2);
+    toast(`Parsed ${data.count} records — Type: ${currentType}`, 'success');
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-play-circle-fill"></i> Parse & Preview';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   PREVIEW
+═══════════════════════════════════════════════════════════════ */
+function setupLedgerNameFilter(data, type) {
+  const el = document.getElementById('ledgerNameFilter');
+  if (!el) return;
+
+  // Destroy previous instance
+  if (ledgerNameTom) {
+    try { ledgerNameTom.destroy(); } catch(e) {}
+    ledgerNameTom = null;
+  }
+  el.innerHTML = '';
+
+  if (!data || type !== 'contacts') return;
+
+  const names = new Set();
+  (data.records || []).forEach(r => {
+    const n = (r && (r.ContactName || r.name)) ? String(r.ContactName || r.name).trim() : '';
+    if (n) names.add(n);
+  });
+  const sorted = Array.from(names).sort((a,b) => a.localeCompare(b));
+  sorted.forEach(n => {
+    const opt = document.createElement('option');
+    opt.value = n;
+    opt.textContent = n;
+    el.appendChild(opt);
+  });
+
+  ledgerNameTom = new TomSelect('#ledgerNameFilter', {
+    plugins: ['remove_button'],
+    maxOptions: 5000,
+    create: false,
+    placeholder: 'Search ledger name...',
+  });
+}
+
+function renderPreview(data) {
+  // Stats
+  document.getElementById('statCount').textContent  = data.count;
+  document.getElementById('statFields').textContent = data.raw_fields.length;
+
+  // Type pill
+  const pill = document.getElementById('typePill');
+  pill.className = `detect-pill type-${data.detected_type}`;
+  document.getElementById('typePillText').textContent = data.detected_type.replace('_', ' ').toUpperCase();
+
+  // Set override select
+  document.getElementById('typeOverride').value = data.detected_type;
+
+  // Parse errors
+  if (data.errors && data.errors.length) {
+    const el = document.getElementById('parseErrors');
+    el.style.display = 'block';
+    el.innerHTML = '<strong>Notes:</strong> ' + data.errors.map(e => `<br>• ${e}`).join('');
+  }
+
+  // Table header (Show ALL columns so users can inspect their JSON data)
+  const displayFields = data.raw_fields;
+  const thead = document.getElementById('previewHeader');
+  thead.innerHTML = displayFields.map(f => `<th style="white-space:nowrap;">${f}</th>`).join('');
+
+  // Table rows (first 10)
+  const tbody = document.getElementById('previewBody');
+  const rows  = (data.records || []).slice(0, 10);
+  tbody.innerHTML = rows.map(row =>
+    `<tr>${displayFields.map(f => `<td style="white-space:nowrap;">${escHtml(String(row[f] ?? '').slice(0,60))}</td>`).join('')}</tr>`
+  ).join('');
+}
+
+function onTypeOverride() {
+  currentType = document.getElementById('typeOverride').value;
+  const pill = document.getElementById('typePill');
+  pill.className = `detect-pill type-${currentType}`;
+  document.getElementById('typePillText').textContent = currentType.replace('_', ' ').toUpperCase();
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   FIELD MAPPING
+═══════════════════════════════════════════════════════════════ */
+const ZOHO_FIELDS = {
+  invoices:       ["InvoiceDate","InvoiceNumber","CustomerName","PlaceOfSupply","PaymentTerms","DueDate","ItemName","ItemDescription","Quantity","Unit","Price","DiscountAmount","TaxName","TaxType","TaxPercent","SubTotal","TotalTaxAmount","Total","RoundOff","Notes","Reference","Currency","ExchangeRate"],
+  bills:          ["BillDate","BillNumber","VendorName","PlaceOfSupply","PaymentTerms","DueDate","ItemName","ItemDescription","Quantity","Unit","Price","DiscountAmount","TaxName","TaxType","TaxPercent","SubTotal","TotalTaxAmount","Total","RoundOff","Notes","Reference","Currency"],
+  journals:       ["JournalDate","JournalNumber","ReferenceNumber","Notes","AccountName","DebitAmount","CreditAmount","TaxName","TaxType","TaxPercent"],
+  payments_made:  ["Date","PaymentNumber","VendorName","PaymentMode","Amount","ReferenceNumber","Notes","Currency","BankCharges"],
+  receipts:       ["Date","ReceiptNumber","CustomerName","PaymentMode","Amount","ReferenceNumber","Notes","Currency","BankCharges"],
+  sales_orders:   ["SalesOrderDate","SalesOrderNumber","CustomerName","ShipmentDate","PaymentTerms","DeliveryMethod","ItemName","Quantity","Unit","Price","DiscountAmount","TaxName","TaxPercent","SubTotal","Total","Notes"],
+  purchase_orders:["PurchaseOrderDate","PurchaseOrderNumber","VendorName","DeliveryDate","PaymentTerms","ItemName","Quantity","Unit","Price","DiscountAmount","TaxName","TaxPercent","SubTotal","Total","Notes"],
+  credit_notes:   ["CreditNoteDate","CreditNoteNumber","CustomerName","InvoiceNumber","ItemName","Quantity","Unit","Price","TaxName","TaxPercent","Total","Notes"],
+  debit_notes:    ["DebitNoteDate","DebitNoteNumber","VendorName","BillNumber","ItemName","Quantity","Unit","Price","TaxName","TaxPercent","Total","Notes"],
+  contacts:       ["ContactName","CompanyName","ContactType","EmailAddress","Phone","GST Treatment","GSTIN / UIN","PAN","Business Legal Name","Business Trade Name","Place of Supply","BillingAddress","BillingCity","BillingState","BillingCountry","BillingZip","Under","UnderParent","RegistrationType","Currency","PaymentTerms"],
+  items:          ["ItemName","SKU","Unit","SalesPrice","SalesAccount","PurchasePrice","PurchaseAccount","Tax","Description"],
+  generic:        ["Date","Number","Party","Amount","Description","Reference","Notes"],
+};
+
+const ALIAS_MAP = {
+  invoicenumber:   ["vouchernumber","invoice_number","number","Number","VOUCHERNUMBER"],
+  invoicedate:     ["date","Date","DATE","invoice_date"],
+  billnumber:      ["vouchernumber","bill_number","number","VOUCHERNUMBER"],
+  billdate:        ["date","Date","DATE","bill_date"],
+  journaldate:     ["date","Date","DATE"],
+  journalnumber:   ["vouchernumber","VOUCHERNUMBER","number"],
+  customername:    ["partyledgername","customer_name","party","Party","PARTYLEDGERNAME"],
+  vendorname:      ["partyledgername","vendor_name","party","Party","PARTYLEDGERNAME"],
+  total:           ["Total","amount","total_amount","AMOUNT"],
+  totaltaxamount:  ["TotalTaxAmount","tax_total","tax_amount"],
+  notes:           ["Notes","narration","NARRATION","narrations"],
+  reference:       ["Reference","reference","REFERENCE","reference_number"],
+  amount:          ["Amount","amount","total_amount","AMOUNT"],
+  itemname:        ["ItemName","item_name","STOCKITEMNAME","stockitemname"],
+  quantity:        ["Quantity","quantity","actualqty","ACTUALQTY"],
+  unit:            ["Unit","unit","baseunits","BASEUNITS"],
+  price:           ["Price","price","rate","Rate","RATE"],
+  paymentmode:     ["PaymentMode","payment_mode"],
+  paymentnumber:   ["vouchernumber","VOUCHERNUMBER","payment_number"],
+  date:            ["Date","date","DATE"],
+  accountname:     ["AccountName","ledger_name","LEDGERNAME"],
+  debitamount:     ["DebitAmount","debit_amount"],
+  creditamount:    ["CreditAmount","credit_amount"],
+  placeofsupply:   ["PlaceOfSupply","place_of_supply","PLACEOFSUPPLY"],
+  "gstin / uin":   ["GSTIN","partygstin","gstin","PARTYGSTIN"],
+  gstin:           ["GSTIN","partygstin","gstin","PARTYGSTIN"],
+  "gst treatment": ["GSTTreatment","gsttreatment","gst_treatment","GST_TREATMENT"],
+  "business legal name": ["BusinessLegalName","businesslegalname","CompanyName","ContactName","NAME","name"],
+  "business trade name": ["BusinessTradeName","businesstradename","CompanyName","ContactName","NAME","name"],
+  "place of supply": ["PlaceOfSupply","placeofsupply","ledgstregdetails.list_placeofsupply","LEDGSTREGDETAILS.LIST_PLACEOFSUPPLY","state","STATE"],
+  contactname:     ["ContactName","contact_name","NAME","name"],
+  number:          ["Number","VOUCHERNUMBER","number","vouchernumber"],
+  party:           ["Party","PARTYLEDGERNAME","party_name","party"],
+  referencenumber: ["ReferenceNumber","reference","REFERENCE","reference_number"],
+  receiptnumber:   ["ReceiptNumber","receipt_number","vouchernumber","VOUCHERNUMBER"],
+  subtotal:        ["SubTotal","subtotal","sub_total"],
+};
+
+function goToMapping() {
+  // Determine Zoho columns: from sample or from type default
+  let zohoCols;
+  if (sampleCols && sampleCols.length > 0) {
+    zohoCols = sampleCols;
+    document.getElementById('sampleMappedBanner').style.display = 'block';
+  } else {
+    zohoCols = ZOHO_FIELDS[currentType] || ZOHO_FIELDS.generic;
+    document.getElementById('sampleMappedBanner').style.display = 'none';
+  }
+
+  // Build mapping with auto-suggestions
+  currentMapping = {};
+  zohoCols.forEach(zf => {
+    const aliases = ALIAS_MAP[zf.toLowerCase()] || [zf];
+    let found = '';
+    for (const alias of aliases) {
+      const match = rawFields.find(rf => rf === alias || rf.toLowerCase() === alias.toLowerCase());
+      if (match) { found = match; break; }
+    }
+    currentMapping[zf] = found;
+  });
+
+  renderMappingTable(zohoCols);
+  showSection('step3Section', 3);
+}
+
+function renderMappingTable(zohoCols) {
+  const tbody = document.getElementById('mappingBody');
+
+  // Compute a sample value for every Tally field to help the user identify it
+  const fieldSamples = {};
+  rawFields.forEach(rf => {
+    let sample = '';
+    if (parsedData && parsedData.records) {
+      for (const rec of parsedData.records) {
+        if (rec[rf] !== undefined && rec[rf] !== null && rec[rf] !== '') {
+          let s = String(rec[rf]);
+          if (s.length > 35) s = s.substring(0, 35) + '...';
+          sample = s;
+          break;
+        }
+      }
+    }
+    fieldSamples[rf] = sample;
+  });
+
+  const FIELD_HINTS = {
+    'ContactName': 'The name of the Customer or Vendor',
+    'ContactType': 'Must be Customer or Vendor',
+    'PaymentTerms': 'e.g. Net 30, Due on Receipt',
+    'JournalDate': 'Date of the transaction',
+    'DebitAmount': 'Amount getting debited',
+    'CreditAmount': 'Amount getting credited'
+  };
+
+  tbody.innerHTML = zohoCols.map((zf, idx) => {
+    const tally = currentMapping[zf] || '';
+    const isLiteral = tally.startsWith('__literal__:');
+    const hint = FIELD_HINTS[zf] ? `<div style="font-size:10px; color:#999; margin-top:3px;"><i>${FIELD_HINTS[zf]}</i></div>` : '';
+    
+    return `
+    <tr data-zoho="${zf}" id="mrow_${idx}">
+      <td style="color:var(--muted); font-size:11px;">${idx+1}</td>
+      <td>
+        <span class="zoho-col-badge"><i class="bi bi-columns me-1"></i>${zf}</span>
+        ${hint}
+      </td>
+      <td>
+        <select id="sel_${idx}">
+          <option value="">— Not mapped —</option>
+          <option value="__literal__" ${valIsLiteralOrSelf(tally, '__literal__') ? 'selected' : ''}>— Literal value —</option>
+          ${rawFields.map(rf => {
+            const sampleText = fieldSamples[rf] ? ` (ex: "${escHtml(fieldSamples[rf])}")` : '';
+            return `<option value="${rf}" ${rf===tally?'selected':''}>${rf}${sampleText}</option>`;
+          }).join('')}
+        </select>
+      </td>
+      <td>
+        <input type="text" class="literal-input" id="lit_${idx}"
+          placeholder="Enter fixed value…"
+          style="display:${isLiteral?'block':'none'};"
+          value="${isLiteral ? tally.slice(12) : ''}"
+          oninput="onLiteralChange('${zf}', this.value)" />
+      </td>
+      <td style="text-align:center;">
+        <i class="bi bi-${tally?'check-circle-fill mapped-ok':'dash-circle mapped-no'}" id="status_${idx}"></i>
+      </td>
+    </tr>`;
+  }).join('');
+
+  // Initialize TomSelect on all mapping selects
+  setTimeout(() => {
+    zohoCols.forEach((zf, idx) => {
+      const selectEl = document.getElementById(`sel_${idx}`);
+      if (selectEl) {
+        new TomSelect(selectEl, {
+          create: false,
+          maxOptions: null,
+          placeholder: 'Search fields...',
+          onChange: function(value) {
+            onMappingChange(zf, { value: value }, idx);
+          }
+        });
+      }
+    });
+  }, 50);
+
+  updateMappedCount();
+}
+
+function valIsLiteralOrSelf(tally, check) {
+    if (check === '__literal__' && tally.startsWith('__literal__:')) return true;
+    return tally === check;
+}
+
+function onMappingChange(zohoCol, sel, idx) {
+  const val = sel.value;
+  const litInput = document.getElementById(`lit_${idx}`);
+  const statusIcon = document.getElementById(`status_${idx}`);
+
+  if (val === '__literal__') {
+    litInput.style.display = 'block';
+    currentMapping[zohoCol] = `__literal__:${litInput.value}`;
+    statusIcon.className = litInput.value ? 'bi bi-check-circle-fill mapped-ok' : 'bi bi-dash-circle mapped-no';
+  } else {
+    litInput.style.display = 'none';
+    currentMapping[zohoCol] = val;
+    statusIcon.className = val ? 'bi bi-check-circle-fill mapped-ok' : 'bi bi-dash-circle mapped-no';
+  }
+  updateMappedCount();
+}
+
+function onLiteralChange(zohoCol, val) {
+  currentMapping[zohoCol] = `__literal__:${val}`;
+  updateMappedCount();
+}
+
+function updateMappedCount() {
+  const total   = Object.keys(currentMapping).length;
+  const mapped  = Object.values(currentMapping).filter(v => v && v !== '__literal__').length;
+  document.getElementById('mappedCount').textContent = mapped;
+  document.getElementById('totalMapped').textContent = total;
+}
+
+function autoMap() {
+  const zohoCols = Object.keys(currentMapping);
+  zohoCols.forEach((zf, idx) => {
+    const aliases = ALIAS_MAP[zf.toLowerCase()] || [zf];
+    let found = '';
+    for (const alias of aliases) {
+      const match = rawFields.find(rf => rf === alias || rf.toLowerCase() === alias.toLowerCase());
+      if (match) { found = match; break; }
+    }
+    if (found) {
+      currentMapping[zf] = found;
+      const sel = document.getElementById(`sel_${idx}`);
+      if (sel && sel.tomselect) {
+        sel.tomselect.setValue(found, true); // true = silent to prevent extra onChange loops
+      }
+      const si  = document.getElementById(`status_${idx}`);
+      if (si)  si.className = 'bi bi-check-circle-fill mapped-ok';
+      const li  = document.getElementById(`lit_${idx}`);
+      if (li)  li.style.display = 'none';
+    }
+  });
+  updateMappedCount();
+  toast('Auto-map complete!', 'info');
+}
+
+function clearMap() {
+  const zohoCols = Object.keys(currentMapping);
+  zohoCols.forEach((zf, idx) => {
+    currentMapping[zf] = '';
+    const sel = document.getElementById(`sel_${idx}`);
+    if (sel && sel.tomselect) {
+      sel.tomselect.setValue('', true); // silent update
+    }
+    const si  = document.getElementById(`status_${idx}`);
+    if (si)  si.className = 'bi bi-dash-circle mapped-no';
+    const li  = document.getElementById(`lit_${idx}`);
+    if (li) { li.style.display = 'none'; li.value = ''; }
+  });
+  updateMappedCount();
+  toast('Mapping cleared', 'info');
+}
+
+function filterMappingRows() {
+  const q = document.getElementById('fieldSearch').value.toLowerCase();
+  document.querySelectorAll('#mappingBody tr').forEach(row => {
+    const zohoCol = (row.dataset.zoho || '').toLowerCase();
+    row.style.display = zohoCol.includes(q) ? '' : 'none';
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   EXPORT
+═══════════════════════════════════════════════════════════════ */
+function goToExport() {
+  // Stats (apply export filters so this matches what will be downloaded)
+  let expRecs = parsedData ? (parsedData.records || []) : [];
+  if (currentType === 'contacts') {
+    const filterVal = document.getElementById('exportFilter').value;
+    if (filterVal !== 'all') expRecs = expRecs.filter(r => r["ContactType"] === filterVal);
+    const selected = (ledgerNameTom && ledgerNameTom.items) ? ledgerNameTom.items : [];
+    if (selected.length > 0) {
+      const set = new Set(selected);
+      expRecs = expRecs.filter(r => {
+        const nm = (r && (r.ContactName || r.name)) ? String(r.ContactName || r.name).trim() : '';
+        return nm && set.has(nm);
+      });
+    }
+  }
+  document.getElementById('expRecords').textContent = expRecs.length;
+  const mapped = Object.values(currentMapping).filter(v => v).length;
+  document.getElementById('expMapped').textContent  = mapped;
+  document.getElementById('expType').textContent    = currentType;
+
+  // Show contact filter if it's contacts
+  if (currentType === 'contacts') {
+    document.getElementById('contactsFilterSection').style.display = 'block';
+  } else {
+    document.getElementById('contactsFilterSection').style.display = 'none';
+  }
+
+  // Mapping summary chips
+  const list = document.getElementById('mappingSummaryList');
+  list.innerHTML = '';
+  Object.entries(currentMapping).forEach(([zf, tf]) => {
+    if (!tf) return;
+    const tDisplay = tf.startsWith('__literal__:') ? `"${tf.slice(12)}"` : tf;
+    list.innerHTML += `
+      <div style="background:#f0f4f9;border-radius:8px;padding:5px 12px;font-size:12px;display:flex;gap:6px;align-items:center;">
+        <span style="background:#e8f0fe;color:var(--primary);border-radius:4px;padding:2px 7px;font-weight:600;">${zf}</span>
+        <i class="bi bi-arrow-right text-muted"></i>
+        <span style="color:var(--muted);">${tDisplay}</span>
+      </div>`;
+  });
+
+  showSection('step4Section', 4);
+}
+
+async function doExport() {
+  const btn = document.getElementById('downloadBtn');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spin"></span> Generating…';
+
+  const fmt = document.querySelector('input[name="exportFmt"]:checked').value;
+
+  try {
+    let outputRecords = parsedData.records;
+    if (currentType === 'contacts') {
+      const filterVal = document.getElementById('exportFilter').value;
+      if (filterVal !== 'all') {
+        outputRecords = outputRecords.filter(r => r["ContactType"] === filterVal);
+      }
+
+      // Specific ledger-name filter (if any names selected)
+      const selected = (ledgerNameTom && ledgerNameTom.items) ? ledgerNameTom.items : [];
+      if (selected.length > 0) {
+        const set = new Set(selected);
+        outputRecords = outputRecords.filter(r => {
+          const nm = (r && (r.ContactName || r.name)) ? String(r.ContactName || r.name).trim() : '';
+          return nm && set.has(nm);
+        });
+      }
+    }
+
+    const payload = {
+      records:       outputRecords,
+      field_mapping: currentMapping,
+      export_format: fmt,
+    };
+    const res = await fetch('/api/converter/export', {
+      method:  'POST',
+      headers: {'Content-Type': 'application/json'},
+      body:    JSON.stringify(payload),
+    });
+
+    if (!res.ok) {
+      const err = await res.json();
+      toast('Export error: ' + (err.error || res.statusText), 'error');
+      return;
+    }
+
+    // Trigger download
+    const blob     = await res.blob();
+    const ext      = fmt === 'csv' ? 'csv' : 'xlsx';
+    const filename = `zoho_import_${currentType}_${Date.now()}.${ext}`;
+    const url      = URL.createObjectURL(blob);
+    const a        = document.createElement('a');
+    a.href = url; a.download = filename; a.click();
+    URL.revokeObjectURL(url);
+
+    toast(`File downloaded: ${filename}`, 'success');
+  } catch(e) {
+    toast('Network error: ' + e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = '<i class="bi bi-download"></i> Download File';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   SECTION NAVIGATION
+═══════════════════════════════════════════════════════════════ */
+const ALL_SECTIONS = ['step2Section','step3Section','step4Section'];
+const STEP_ITEMS   = ['stepItem1','stepItem2','stepItem3','stepItem4'];
+
+function showSection(id, stepNum) {
+  ALL_SECTIONS.forEach(s => document.getElementById(s).classList.remove('visible'));
+  document.getElementById(id).classList.add('visible');
+
+  STEP_ITEMS.forEach((si, idx) => {
+    const el = document.getElementById(si);
+    el.classList.remove('active','done');
+    if (idx + 1 < stepNum)      el.classList.add('done');
+    else if (idx + 1 === stepNum) el.classList.add('active');
+  });
+
+  document.getElementById(id).scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+/* ═══════════════════════════════════════════════════════════════
+   TOAST
+═══════════════════════════════════════════════════════════════ */
+function toast(msg, type = 'info') {
+  const wrap = document.getElementById('toastWrap');
+  const el = document.createElement('div');
+  const icon = type === 'success' ? 'check-circle-fill' : type === 'error' ? 'exclamation-triangle-fill' : 'info-circle-fill';
+  el.className = `toast-msg ${type}`;
+  el.innerHTML = `<i class="bi bi-${icon}"></i> ${msg}`;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+function escHtml(str) {
+  return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+</script>
+  </main>
+</div>
+</body>
+</html>

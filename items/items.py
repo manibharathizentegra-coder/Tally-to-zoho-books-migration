@@ -293,31 +293,31 @@ def search_item(query, items):
     found = [i for i in items if query.lower() in i["name"].lower()]
 
     if not found:
-        print("❌ No item found")
+        print(" No item found")
         return
 
     for i in found:
         print("\n" + "="*80)
-        print(f"📦 ITEM NAME            : {i['name']}")
-        print(f"📁 STOCK GROUP          : {i['group']}")
-        print(f"📏 UNIT                 : {i['unit']}\n")
+        print(f" ITEM NAME            : {i['name']}")
+        print(f" STOCK GROUP          : {i['group']}")
+        print(f" UNIT                 : {i['unit']}\n")
 
-        print(f"📌 SOURCE OF HSN DETAILS: {i['hsn_source']}")
-        print(f"🧾 HSN / SAC            : {i['hsn']}")
-        print(f"📝 DESCRIPTION          : {i['description']}\n")
+        print(f" SOURCE OF HSN DETAILS: {i['hsn_source']}")
+        print(f" HSN / SAC            : {i['hsn']}")
+        print(f" DESCRIPTION          : {i['description']}\n")
         
-        print(f"✅ GST APPLICABILITY    : {i['gst_applicable']}")
-        print(f"📊 GST RATE SOURCE      : {i['gst_rate_source']}")
-        print(f"💸 GST RATE             : {i['gst_rate']}")
-        print(f"📄 TAXABILITY TYPE      : {i['taxability']}")
+        print(f" GST APPLICABILITY    : {i['gst_applicable']}")
+        print(f" GST RATE SOURCE      : {i['gst_rate_source']}")
+        print(f" GST RATE             : {i['gst_rate']}")
+        print(f" TAXABILITY TYPE      : {i['taxability']}")
         
-        print(f"📦 TYPE OF SUPPLY       : {i['supply_type']}")
+        print(f" TYPE OF SUPPLY       : {i['supply_type']}")
         
-        print(f"💰 RATE OF DUTY         : {i['rate_of_duty']}\n")
+        print(f" RATE OF DUTY         : {i['rate_of_duty']}\n")
 
-        print(f"📊 OPENING QTY          : {i['qty']} {i['qty_unit']}")
-        print(f"💰 RATE / UNIT          : {i['rate']} / {i['rate_unit']}")
-        print(f"💰 TOTAL VALUE          : {i['value']}")
+        print(f" OPENING QTY          : {i['qty']} {i['qty_unit']}")
+        print(f" RATE / UNIT          : {i['rate']} / {i['rate_unit']}")
+        print(f" TOTAL VALUE          : {i['value']}")
         print("="*80)
 
 # ----------------------------------------------------------
@@ -326,14 +326,14 @@ def search_item(query, items):
 
 if __name__ == "__main__":
 
-    print("🚀 TALLY STOCK ITEM – FINAL WITH GROUP INHERITANCE")
+    print(" TALLY STOCK ITEM – FINAL WITH GROUP INHERITANCE")
     print("="*80)
 
     groups = fetch_stock_groups()
     items = fetch_stock_items(groups)
 
     while True:
-        q = input("\n🔍 Search Item (or EXIT): ")
+        q = input("\n Search Item (or EXIT): ")
         if q.lower() == "exit":
             break
         search_item(q, items)

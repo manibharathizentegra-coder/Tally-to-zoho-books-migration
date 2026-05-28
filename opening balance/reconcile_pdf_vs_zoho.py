@@ -346,12 +346,12 @@ def amt_cell(ws, row, col, val, color=None):
 def build_summary_sheet(wb, matched, mismatched, only_tally, only_zoho,
                         t_company, t_period, z_company, z_period):
     ws = wb.active
-    ws.title = '📊 Summary'
+    ws.title = ' Summary'
     ws.sheet_view.showGridLines = False
 
     # Title block
     ws.merge_cells('A1:G1')
-    ws['A1'] = '✦  TALLY ↔ ZOHO BOOKS — TRIAL BALANCE RECONCILIATION REPORT'
+    ws['A1'] = '  TALLY ↔ ZOHO BOOKS — TRIAL BALANCE RECONCILIATION REPORT'
     ws['A1'].font = make_font(bold=True, color=C_WHITE, size=16)
     ws['A1'].fill = make_fill(C_DARK_BG)
     ws['A1'].alignment = make_align('center', 'center')
@@ -382,10 +382,10 @@ def build_summary_sheet(wb, matched, mismatched, only_tally, only_zoho,
 
     # KPI Cards (row 5–8)
     kpis = [
-        ('A', '✅ Matched',       len(matched),    C_GREEN,  C_GREEN_LITE,  '✓ Amounts match in both systems'),
-        ('B', '❌ Mismatched',    len(mismatched), C_RED,    C_RED_LITE,    '⚠ Different amounts detected'),
-        ('C', '⚠ Missing in Zoho', len(only_tally), C_ORANGE, C_ORANGE_LITE, '→ In Tally but not in Zoho'),
-        ('D', '🔵 Extra in Zoho',  len(only_zoho),  C_BLUE,   C_BLUE_LITE,   '→ In Zoho but not in Tally'),
+        ('A', ' Matched',       len(matched),    C_GREEN,  C_GREEN_LITE,  ' Amounts match in both systems'),
+        ('B', ' Mismatched',    len(mismatched), C_RED,    C_RED_LITE,    ' Different amounts detected'),
+        ('C', ' Missing in Zoho', len(only_tally), C_ORANGE, C_ORANGE_LITE, '→ In Tally but not in Zoho'),
+        ('D', ' Extra in Zoho',  len(only_zoho),  C_BLUE,   C_BLUE_LITE,   '→ In Zoho but not in Tally'),
     ]
     for col_letter, title, count, accent, lite, desc in kpis:
         col_idx = ord(col_letter) - ord('A') + 1
@@ -463,7 +463,7 @@ def build_summary_sheet(wb, matched, mismatched, only_tally, only_zoho,
             c.alignment = make_align('right')
             c.border = make_border()
             ok = diff_val < 1
-            c = ws.cell(row=i, column=5, value='✓ OK' if ok else '✗ Differs')
+            c = ws.cell(row=i, column=5, value=' OK' if ok else ' Differs')
             c.font = make_font(color=C_GREEN if ok else C_RED, bold=True, size=9)
             c.border = make_border()
         else:
@@ -477,7 +477,7 @@ def build_summary_sheet(wb, matched, mismatched, only_tally, only_zoho,
     # Root cause analysis (row 16+)
     ws.row_dimensions[16].height = 10
     ws.row_dimensions[17].height = 20
-    ws.cell(row=17, column=1, value='🔍 ROOT CAUSE ANALYSIS').font = make_font(bold=True, color=C_WHITE, size=11)
+    ws.cell(row=17, column=1, value=' ROOT CAUSE ANALYSIS').font = make_font(bold=True, color=C_WHITE, size=11)
     ws.cell(row=17, column=1).fill = make_fill('1E293B')
     ws.merge_cells('A17:G17')
 
@@ -486,10 +486,10 @@ def build_summary_sheet(wb, matched, mismatched, only_tally, only_zoho,
     partial        = sum(1 for r in mismatched if r['root_cause'] == 'Partial amount mismatch')
 
     causes = [
-        ('🔄 DR/CR Side Reversed',        reversed_count, C_RED,    'Opening balance sign convention inverted during migration. Fix: Reverse DR/CR in Zoho → Accountant → Opening Balances.'),
-        ('🔢 Partial Amount Mismatch',     partial,        C_ORANGE, 'Amounts differ but not reversed. May be due to TDS, rounding, or partial entries. Verify individually.'),
+        (' DR/CR Side Reversed',        reversed_count, C_RED,    'Opening balance sign convention inverted during migration. Fix: Reverse DR/CR in Zoho → Accountant → Opening Balances.'),
+        (' Partial Amount Mismatch',     partial,        C_ORANGE, 'Amounts differ but not reversed. May be due to TDS, rounding, or partial entries. Verify individually.'),
         ('⭕ Zero Balance in Zoho',        zero_zoho,      C_BLUE,   'Account exists in Zoho but opening balance was not set. Go to Zoho → Chart of Accounts → Opening Balances.'),
-        ('❓ Missing in Zoho',             len(only_tally),C_PURPLE, 'Ledgers from Tally not created in Zoho. Likely Sundry Debtors/Creditors rolled up into AR/AP.'),
+        (' Missing in Zoho',             len(only_tally),C_PURPLE, 'Ledgers from Tally not created in Zoho. Likely Sundry Debtors/Creditors rolled up into AR/AP.'),
     ]
     for i, (cause, count, color, fix) in enumerate(causes, 18):
         ws.row_dimensions[i].height = 36
@@ -513,7 +513,7 @@ def build_summary_sheet(wb, matched, mismatched, only_tally, only_zoho,
 
 
 def build_mismatch_sheet(wb, mismatched):
-    ws = wb.create_sheet('❌ Mismatches')
+    ws = wb.create_sheet(' Mismatches')
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = 'A2'
 
@@ -589,7 +589,7 @@ def build_mismatch_sheet(wb, mismatched):
 
 
 def build_matched_sheet(wb, matched):
-    ws = wb.create_sheet('✅ Matched')
+    ws = wb.create_sheet(' Matched')
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = 'A2'
 
@@ -610,7 +610,7 @@ def build_matched_sheet(wb, matched):
             c.number_format = INR_FMT
             c.alignment = make_align('right')
             c.border = make_border()
-        ok_c = ws.cell(row=i, column=8, value='✓ MATCHED')
+        ok_c = ws.cell(row=i, column=8, value=' MATCHED')
         ok_c.font = make_font(bold=True, color=C_GREEN, size=9)
         ok_c.fill = make_fill(C_GREEN_LITE)
         ok_c.alignment = make_align('center')
@@ -623,7 +623,7 @@ def build_matched_sheet(wb, matched):
 
 
 def build_tally_only_sheet(wb, only_tally):
-    ws = wb.create_sheet('⚠ Tally Only')
+    ws = wb.create_sheet(' Tally Only')
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = 'A2'
 
@@ -659,7 +659,7 @@ def build_tally_only_sheet(wb, only_tally):
 
 
 def build_zoho_only_sheet(wb, only_zoho):
-    ws = wb.create_sheet('🔵 Zoho Only')
+    ws = wb.create_sheet(' Zoho Only')
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = 'A2'
 
@@ -703,7 +703,7 @@ def build_zoho_only_sheet(wb, only_zoho):
 
 
 def build_raw_tally_sheet(wb, rows, company, period):
-    ws = wb.create_sheet('📄 Raw Tally PDF')
+    ws = wb.create_sheet(' Raw Tally PDF')
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = 'A3'
 
@@ -746,7 +746,7 @@ def build_raw_tally_sheet(wb, rows, company, period):
 
 
 def build_raw_zoho_sheet(wb, rows, company, period):
-    ws = wb.create_sheet('☁ Raw Zoho Excel')
+    ws = wb.create_sheet(' Raw Zoho Excel')
     ws.sheet_view.showGridLines = False
     ws.freeze_panes = 'A3'
 
@@ -795,21 +795,21 @@ def main():
 
     print(f'\n[1/4] Parsing Tally PDF: {PDF_PATH}')
     t_company, t_period, tally_rows = parse_tally_pdf(PDF_PATH)
-    print(f'      ✓ {len(tally_rows)} rows  |  Company: {t_company}  |  Period: {t_period}')
+    print(f'       {len(tally_rows)} rows  |  Company: {t_company}  |  Period: {t_period}')
 
     print(f'\n[2/4] Parsing Zoho Excel: {EXCEL_PATH}')
     z_company, z_period, zoho_rows = parse_zoho_excel(EXCEL_PATH)
-    print(f'      ✓ {len(zoho_rows)} rows  |  Company: {z_company}  |  Period: {z_period}')
+    print(f'       {len(zoho_rows)} rows  |  Company: {z_company}  |  Period: {z_period}')
 
     print('\n[3/4] Running reconciliation...')
     matched, mismatched, only_tally, only_zoho = reconcile(tally_rows, zoho_rows)
     total = len(matched) + len(mismatched) + len(only_tally) + len(only_zoho)
     match_pct = len(matched) / total * 100 if total else 0
 
-    print(f'      ✓ Matched:      {len(matched):4d}  ({match_pct:.1f}%)')
-    print(f'      ✓ Mismatched:   {len(mismatched):4d}')
-    print(f'      ✓ Tally only:   {len(only_tally):4d}')
-    print(f'      ✓ Zoho only:    {len(only_zoho):4d}')
+    print(f'       Matched:      {len(matched):4d}  ({match_pct:.1f}%)')
+    print(f'       Mismatched:   {len(mismatched):4d}')
+    print(f'       Tally only:   {len(only_tally):4d}')
+    print(f'       Zoho only:    {len(only_zoho):4d}')
 
     print(f'\n[4/4] Generating Excel report: {OUT_PATH}')
     wb = openpyxl.Workbook()
@@ -824,7 +824,7 @@ def main():
     build_raw_zoho_sheet(wb, zoho_rows, z_company, z_period)
 
     wb.save(OUT_PATH)
-    print(f'\n✅ Report saved: {OUT_PATH}')
+    print(f'\n Report saved: {OUT_PATH}')
     print(f'   Sheets:')
     for s in wb.sheetnames:
         print(f'     • {s}')

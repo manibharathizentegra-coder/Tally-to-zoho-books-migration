@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -8,30 +8,29 @@
     <!-- Bootstrap 5 -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-
-    <style>
-        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
-        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .nav-link.active { color: #5e35b1 !important; font-weight: 500; border-bottom: 2px solid #5e35b1; }
-
-        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #5e35b1; transition: transform 0.2s; }
-        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
-        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-
-        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
-        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
-
-        /* Month pill buttons */
-        .month-pill { border-radius: 20px; padding: 4px 14px; font-size: 12px; font-weight: 500;
-                      border: 1.5px solid #dee2e6; background: #fff; cursor: pointer; transition: all .15s; }
-        .month-pill:hover  { background: #5e35b1; color: #fff; border-color: #5e35b1; }
-        .month-pill.active { background: #5e35b1; color: #fff; border-color: #5e35b1; box-shadow: 0 2px 6px rgba(94,53,177,.35); }
-        .month-filter-bar  { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 10px 16px; background: #f8f9ff; border-top: 1px solid #eee; }
-    </style>
+    
+    {% include '_sidebar_styles.html' %}
+    {% include '_zb_theme.html' %}
 </head>
 <body>
+    {% set active_page = 'journals' %}
+    <div class="app-shell">
+        {% include '_sidebar.html' %}
+        <main class="main">
+            {% set page_title = 'Journals' %}
+            {% set page_subtitle = 'Import journal vouchers and sync them to Zoho.' %}
+            {% include '_topbar.html' %}
+
+            {% set steps_title = 'Journals: Recommended Steps' %}
+            {% set steps = [
+              'Confirm Ledgers are synced (chart of accounts + contacts).',
+              'Import journal XML into the active DB.',
+              'Review a few entries for debit/credit mapping.',
+              'Sync to Zoho and export failures for manual fix.'
+            ] %}
+            {% include '_steps_card.html' %}
+
+
 
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
@@ -55,6 +54,12 @@
                 <li class="nav-item me-3">
                     <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
                 </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/credit_note"><i class="bi bi-file-earmark-minus me-1"></i> Credit Note</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/debit_note"><i class="bi bi-file-earmark-plus me-1"></i> Debit Note</a>
+                </li>
                 <li class="nav-item me-3"><a class="nav-link" href="/sales_orders"><i class="bi bi-cart-check me-1"></i> Sales Orders</a></li>
                 <li class="nav-item me-3"><a class="nav-link" href="/purchase_orders"><i class="bi bi-bag-check me-1"></i> Purchase Orders</a></li>
                 <li class="nav-item"><a class="nav-link" href="/opening-balance"><i class="bi bi-bank me-1"></i> Opening Balance</a></li>
@@ -62,7 +67,7 @@
         </div>
     </nav>
 
-    <div class="container-fluid py-4 px-4">
+    <div class="container-fluid p-0">
 
         <!-- HEADER & ACTIONS -->
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -83,7 +88,12 @@
                 <button onclick="syncZoho()" class="btn btn-outline-primary d-flex align-items-center">
                     <i class="bi bi-arrow-repeat me-2"></i> Sync All to Zoho
                 </button>
-                <button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
+                
+                <input type="file" id="jsonUpload" accept=".json" style="display: none;" onchange="uploadJson(event)">
+                <button onclick="document.getElementById('jsonUpload').click()" class="btn btn-outline-success d-flex align-items-center">
+                    <i class="bi bi-upload me-2"></i> Upload JSON
+                </button>
+<button onclick="fetchData()" class="btn btn-primary d-flex align-items-center">
                     <i class="bi bi-cloud-download me-2"></i> Import Journals
                 </button>
             </div>
@@ -238,6 +248,10 @@
     </div>
 
     <!-- SCRIPTS -->
+        </div>
+      </main>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         let allJournals     = [];
@@ -258,11 +272,15 @@
             if (cached) {
                 try {
                     const data = JSON.parse(cached);
-                    allJournals = data.journals || [];
-                    stats       = data.stats   || {};
-                    updateKPIs(stats);
-                    renderJournals(allJournals);
-                    return;   // localStorage had data, done
+                    const cachedJournals = data.journals || [];
+                    if (Array.isArray(cachedJournals) && cachedJournals.length > 0) {
+                        allJournals = cachedJournals;
+                        stats       = data.stats || {};
+                        updateKPIs(stats);
+                        renderJournals(allJournals);
+                        return;   // localStorage had data, done
+                    }
+                    localStorage.removeItem('journalsData'); // empty cache, clear it
                 } catch(e) {
                     localStorage.removeItem('journalsData');  // corrupted, clear it
                 }
@@ -381,9 +399,9 @@
                 const res  = await fetch('/api/journals/refresh_cache', { method: 'POST' });
                 const data = await res.json();
                 if (data.status === 'success') {
-                    alert('✅ Cache Refreshed Successfully!\n\n' + data.message);
+                    alert('Cache refreshed successfully.\n\n' + data.message);
                 } else {
-                    alert('❌ Error: ' + data.message);
+                    alert('Error: ' + data.message);
                 }
             } catch (err) {
                 console.error(err);
@@ -591,12 +609,12 @@
         function showSyncResult(data) {
             if (data.status === 'success') {
                 const total = data.stats.created + data.stats.failed;
-                let msg = `✅ Complete!\n\n📊 Summary:\n`;
+                let msg = `Complete!\n\nSummary:\n`;
                 msg += `  Total Sent : ${total}\n`;
-                msg += `  ✅ Created  : ${data.stats.created}\n`;
-                msg += `  ❌ Failed   : ${data.stats.failed}\n\n`;
+                msg += `  Created  : ${data.stats.created}\n`;
+                msg += `  Failed   : ${data.stats.failed}\n\n`;
                 if (data.stats.failed > 0 && data.stats.errors?.length > 0) {
-                    msg += `⚠️ Failed Journals:\n${'='.repeat(50)}\n`;
+                    msg += `Failed Journals:\n${'='.repeat(50)}\n`;
                     data.stats.errors.forEach((err, i) => {
                         msg += `${i+1}. Journal : ${err.journal_number}\n`;
                         msg += `   Date    : ${err.date || 'N/A'}\n`;
@@ -605,7 +623,7 @@
                 }
                 alert(msg);
             } else {
-                alert('❌ Error: ' + data.message);
+                alert('Error: ' + data.message);
             }
         }
 
@@ -716,6 +734,67 @@
             document.getElementById('journalDetails').innerHTML = html;
             modal.show();
         }
-    </script>
+    
+        // Upload JSON Function
+        async function uploadJson(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const uploadBtn = document.querySelector('button[onclick="document.getElementById(\'jsonUpload\').click()"]');
+            const originalText = uploadBtn.innerHTML;
+            uploadBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Uploading...';
+            uploadBtn.disabled = true;
+
+            try {
+                const response = await fetch('/api/journals/upload', {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await response.json();
+
+                if (response.ok && !result.error) {
+                    // Backend returns { journals: [...], stats: {...} }
+                    const uploaded = result.journals || result.data || [];
+                    if (uploaded.length === 0) {
+                        alert('No journals found in the uploaded JSON file.\nMake sure it is a Tally Journal voucher export.');
+                        return;
+                    }
+                    allJournals = uploaded;
+                    stats = result.stats || {
+                        total_journals: allJournals.length,
+                        total_debit: 0,
+                        total_credit: 0
+                    };
+                    // Compute totals from line_items
+                    let td = 0, tc = 0;
+                    allJournals.forEach(j => {
+                        (j.line_items || []).forEach(item => {
+                            if (item.debit_or_credit === 'debit') td += (item.amount || 0);
+                            else tc += (item.amount || 0);
+                        });
+                    });
+                    stats.total_debit   = td;
+                    stats.total_credit  = tc;
+
+                    localStorage.setItem('journalsData', JSON.stringify({ journals: allJournals, stats }));
+                    updateKPIs(stats);
+                    applyFilters();
+                    alert(`Uploaded ${allJournals.length} journal(s) from JSON file.`);
+                } else {
+                    alert('Error uploading JSON: ' + (result.error || 'Unknown error'));
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('Failed to upload JSON file. See console for details.');
+            } finally {
+                uploadBtn.innerHTML = originalText;
+                uploadBtn.disabled = false;
+                event.target.value = ''; // Reset file input
+            }
+        }
+        </script>
 </body>
 </html>

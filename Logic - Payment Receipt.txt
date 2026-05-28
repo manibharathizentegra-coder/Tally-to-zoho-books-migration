@@ -1,0 +1,79 @@
+========================================================================
+[ PHASE 1: INITIALIZATION & ROUTING ]
+========================================================================
+[ START: Read Payment Receipt from SQLite DB ]
+       |
+[ Load 'Sales_Invoice_Master' & 'Migration_Cutoff_Date' into Memory ]
+       |
+       v
+[ LOOP: For EACH Adjustment Line in the Receipt ]
+       |
+       v
+[ Identify Adjustment Type ]
+       |
+       +---> IF 'Advance' / 'On Account'
+       |         |--> IF 'Cr' -> [ Route to Customer Advance Array ]	
+       |
+       +---> IF 'Agst Ref'
+       |         |--> IF 'Cr' -> [ Route to Invoice Payment Array ]
+       |
+       +---> IF 'New Ref'
+                 |
+                 +---> IF 'Cr'
+                           |
+                 [ Lookup: Does Ref Exist in Sales Master? ]
+                           |
+                           +---> YES -> [ Route to Invoice Payment Array ]
+                           |
+                           +---> NO  -> [ Route to Customer Advance Array ]
+
+
+========================================================================
+[ PHASE 2: PROCESSING INVOICE PAYMENTS (The Date Split & Summing) ]
+========================================================================
+       |
+[ Check Invoice Payment Array for this Receipt ]
+       |
+[ LOOP: For Each Invoice in Array ]
+       |
+       +---> [ Lookup Invoice Date in DB ]
+       |
+       +---> IF Date <= Migration Cutoff (Previous Year)
+       |         |--> Action: Add to "Previous Year Sum" 
+       |         |--> Action: Map to Historical/Opening Balance Invoice ID
+       |
+       +---> IF Date > Migration Cutoff (Current Year)
+                 |--> Action: Add to "Current Year Sum"
+                 |--> Action: Map to exact Current Zoho Invoice ID
+
+========================================================================
+[ PHASE 3: API BUILDERS (Executing the Data) ]
+========================================================================
+
+[ BUILD INVOICE PAYMENT API PAYLOAD ]
+   -> customer_id       = Lookup(Customer_Name)
+   -> date              = Receipt_Date
+   -> account_id        = Lookup(Bank_Name - e.g., SBI)
+   -> reference_number  = Receipt_No
+   -> amount            = (Previous Year Sum + Current Year Sum)
+   -> invoices [        = (Array containing the mapped invoice IDs and amounts)
+          { invoice_id: X, amount_applied: Y },
+          { invoice_id: Z, amount_applied: W }
+      ]
+       |
+       v
+[ POST Request to Zoho Books Customer Payment API ]
+
+
+[ BUILD CUSTOMER ADVANCE API PAYLOAD ] (If any advances exist)
+   -> customer_id       = Lookup(Customer_Name)
+   -> amount            = Line_Item_Amount
+   -> date              = Receipt_Date
+   -> account_id        = Lookup(Bank_Name)
+   -> reference_number  = Adjustment_Ref_No
+   -> description       = Narration
+       |
+       v
+[ POST Request to Zoho Books Customer Advance API ]
+
+[ MOVE TO NEXT RECEIPT IN DATABASE ]

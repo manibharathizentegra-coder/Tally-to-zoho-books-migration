@@ -14,15 +14,16 @@ import os
 
 try:
     import database_manager
-    print("✅ Successfully imported database_manager for Contra module")
+    print(" Successfully imported database_manager for Contra module")
 except ImportError:
-    print("⚠️ Warning: Could not import database_manager.")
+    print("️ Warning: Could not import database_manager.")
     database_manager = None
 
 load_dotenv()
 TALLY_URL = "http://localhost:9000"
 BASE_URL = "https://www.zohoapis.com/books/v3"
 ORGANIZATION_ID = os.getenv("ORGANIZATION_ID")
+from modules.zoho_connector import zoho
 
 def _date_range(from_date_str, to_date_str):
     start = datetime.strptime(from_date_str, "%Y%m%d")
@@ -56,20 +57,20 @@ def _fetch_day_contra(date_str, retries=2):
                 print(f"  ⏱ Timeout for {date_str} after {retries} attempts — skipping")
                 return []
         except Exception as e:
-            print(f"  ❌ Error for {date_str}: {e}")
+            print(f"   Error for {date_str}: {e}")
             return []
     return []
 
 
 def fetch_tally_contra(from_date="20250401", to_date="20250430", limit=None, company_name=None):
     import time
-    print(f"📥 Fetching Contra vouchers: {from_date} → {to_date} (day by day)...")
+    print(f" Fetching Contra vouchers: {from_date} → {to_date} (day by day)...")
     contras = []
 
     for day in _date_range(from_date, to_date):
         vouchers = _fetch_day_contra(day)
         if vouchers:
-            print(f"  ✅ {day}: {len(vouchers)} contra(s)")
+            print(f"   {day}: {len(vouchers)} contra(s)")
         time.sleep(1)
 
         for v in vouchers:
@@ -139,7 +140,7 @@ def fetch_tally_contra(from_date="20250401", to_date="20250430", limit=None, com
                 print(f"  Limit {limit} reached. Stopping early.")
                 return contras
 
-    print(f"✅ Fetched {len(contras)} contra vouchers from Tally")
+    print(f" Fetched {len(contras)} contra vouchers from Tally")
     return contras
 
 
@@ -153,10 +154,10 @@ def parse_tally_json(json_path):
             with open(json_path, 'r', encoding='utf-8') as f:
                 data = json.load(f)
         except Exception as e:
-            print(f"❌ Could not decode JSON: {e}")
+            print(f" Could not decode JSON: {e}")
             return []
     except Exception as e:
-        print(f"❌ Error reading JSON: {e}")
+        print(f" Error reading JSON: {e}")
         return []
 
     vouchers = data.get('tallymessage', [])
@@ -245,46 +246,53 @@ def parse_tally_json(json_path):
                 "tally_guid": tally_guid
             })
 
-    print(f"✅ Defensively parsed {len(contras)} contra vouchers from JSON")
+    print(f" Defensively parsed {len(contras)} contra vouchers from JSON")
     return contras
 
 
-def get_access_token():
-    from database_manager import get_db_connection
-    conn = get_db_connection()
-    cursor = conn.cursor()
-    cursor.execute("SELECT access_token FROM zoho_tokens ORDER BY id DESC LIMIT 1")
-    row = cursor.fetchone()
-    conn.close()
-    if row: return row['access_token']
-    return None
+# Removed manual get_access_token in favor of ZohoConnector
 
-def get_zoho_bank_accounts(token):
+def get_zoho_bank_accounts():
     # Retrieve Chart of Accounts that are of type Bank or Cash
-    url = f"{BASE_URL}/bankaccounts"
-    headers = {"Authorization": f"Zoho-oauthtoken {token}"}
-    params = {"organization_id": ORGANIZATION_ID}
-    try:
-        response = requests.get(url, headers=headers, params=params)
-        if response.status_code == 200:
-            accounts = response.json().get("bankaccounts", [])
-            account_map = {}
-            for account in accounts:
-                account_map[account["account_name"].lower()] = account["account_id"]
-            return account_map
-        return {}
-    except Exception:
-        return {}
+    resp = zoho.api_call("GET", "/bankaccounts")
+    if resp.get("code") == 0:
+        accounts = resp.get("bankaccounts", [])
+        account_map = {}
+        for account in accounts:
+            account_map[account["account_name"].lower()] = account["account_id"]
+        return account_map
+    return {}
+
+_ZOHO_TAGS_CACHE = None
+
+def get_zoho_reporting_tags():
+    global _ZOHO_TAGS_CACHE
+    if _ZOHO_TAGS_CACHE is not None:
+        return _ZOHO_TAGS_CACHE
+        
+    resp = zoho.api_call("GET", "/settings/tags")
+    tags = []
+    if resp.get("code") == 0:
+        for t in resp.get("reporting_tags", []):
+            tag_id = t["tag_id"]
+            t_resp = zoho.api_call("GET", f"/settings/tags/{tag_id}")
+            if t_resp.get("code") == 0:
+                options = t_resp.get("reporting_tag", {}).get("tag_options", [])
+                tag_data = {
+                    "tag_id": str(tag_id),
+                    "tag_name": str(t.get("tag_name", "")).lower(),
+                    "options": {str(o.get("tag_option_name", "")).lower(): str(o.get("tag_option_id", "")) for o in options}
+                }
+                tags.append(tag_data)
+            
+    _ZOHO_TAGS_CACHE = tags
+    return tags
 
 
-def create_zoho_transfer(token, contra_data, bank_account_map):
+def create_zoho_transfer(contra_data, bank_account_map, tags_list=None):
     """
-    Create a bank transfer in Zoho Books.
-    Note: Zoho Books doesn't have a specific "Contra" endpoint, but it has /banktransactions/transfer
-    or standard Journal entries. We'll use Bank Transfers if both accounts are bank/cash.
+    Create a bank transfer in Zoho Books using ZohoConnector.
     """
-    url = f"{BASE_URL}/bankaccounts/transfer"
-    headers = {"Authorization": f"Zoho-oauthtoken {token}", "Content-Type": "application/json"}
     
     from_account = contra_data.get("from_account", "").lower()
     to_account = contra_data.get("to_account", "").lower()
@@ -299,13 +307,49 @@ def create_zoho_transfer(token, contra_data, bank_account_map):
             to_account_id = acc_id
             
     if not getattr(create_zoho_transfer, "warned", False) and (not from_account_id or not to_account_id):
-        print(f"⚠️ Warning: Some Bank/Cash accounts in Tally not mapped correctly to Zoho: '{from_account}' -> '{to_account}'")
+        print(f"️ Warning: Some Bank/Cash accounts in Tally not mapped correctly to Zoho: '{from_account}' -> '{to_account}'")
         create_zoho_transfer.warned = True
 
     if not from_account_id or not to_account_id:
         return False, f"Account Mapping Failed: {from_account} to {to_account}"
 
+    # Parse and match reporting tags
+    zoho_tags = []
+    if tags_list:
+        tally_ccs = contra_data.get("cost_center_allocations", [])
+        if isinstance(tally_ccs, str):
+            try: tally_ccs = json.loads(tally_ccs)
+            except: tally_ccs = []
+
+        # Tally creates cost center items like {"category": "Segment - Marketing", "amount": 100}
+        existing_added = set() # prevent duplicate tag IDs
+        for cc in tally_ccs:
+            cc_full = str(cc.get("category", ""))
+            parts = cc_full.split(' - ', 1)
+            cat_name = parts[0].strip().lower() if len(parts) > 0 else ""
+            opt_name = parts[1].strip().lower() if len(parts) > 1 else cat_name
+            
+            if len(parts) == 1:
+                opt_name = parts[0].strip().lower()
+                cat_name = ""
+
+            for tag in tags_list:
+                if tag["tag_id"] in existing_added:
+                    continue  # A single tag ID can only have one tag option selected
+
+                # Prefer match by option name
+                if opt_name in tag["options"]:
+                    # If category name was provided, ensure it loosely matches tag_name
+                    if not cat_name or cat_name in tag["tag_name"] or tag["tag_name"] in cat_name:
+                        zoho_tags.append({
+                            "tag_id": tag["tag_id"],
+                            "tag_option_id": tag["options"][opt_name]
+                        })
+                        existing_added.add(tag["tag_id"])
+                        break
+
     payload = {
+        "transaction_type": "transfer_fund",
         "from_account_id": from_account_id,
         "to_account_id": to_account_id,
         "amount": contra_data.get("amount", 0),
@@ -314,14 +358,17 @@ def create_zoho_transfer(token, contra_data, bank_account_map):
         "description": contra_data.get("narration", "")
     }
 
-    try:
-        response = requests.post(url, headers=headers, params={"organization_id": ORGANIZATION_ID}, json=payload)
-        if response.status_code in [200, 201]:
-            return True, response.json().get("message", "Success")
-        else:
-            return False, response.text
-    except Exception as e:
-        return False, str(e)
+    if zoho_tags:
+        # Applying tags to both associated bank accounts
+        payload["from_account_tags"] = zoho_tags
+        payload["to_account_tags"] = zoho_tags
+
+
+    resp = zoho.api_call("POST", "/banktransactions", payload=payload)
+    if resp.get("code") == 0:
+        return True, resp.get("message", "Success")
+    else:
+        return False, resp.get("message", "Error")
 
 
 def sync_contra_to_zoho(selected_contras=None, from_date="20250401", to_date="20250430", limit=None, company_name=None):
@@ -330,7 +377,13 @@ def sync_contra_to_zoho(selected_contras=None, from_date="20250401", to_date="20
         if selected_contras:
             contras = [database_manager.get_contra_by_number(c) for c in selected_contras if database_manager.get_contra_by_number(c)]
         else:
-            contras = database_manager.get_all_contra()
+            # Respect date filters if provided
+            conn = database_manager.get_db_connection()
+            query = "SELECT * FROM contra_vouchers WHERE date BETWEEN ? AND ? ORDER BY date DESC"
+            rows = conn.execute(query, (from_date, to_date)).fetchall()
+            conn.close()
+            contras = [dict(r) for r in rows]
+            
             if not contras:
                 # Fallback to Tally fetch
                 contras = fetch_tally_contra(from_date, to_date, limit, company_name)
@@ -343,25 +396,18 @@ def sync_contra_to_zoho(selected_contras=None, from_date="20250401", to_date="20
     if not contras:
         return {"status": "error", "message": "No contra vouchers found to sync."}
 
-    token = get_access_token()
-    if not token:
-        return {"status": "error", "message": "Zoho access token not found."}
-
-    bank_account_map = get_zoho_bank_accounts(token)
+    bank_account_map = get_zoho_bank_accounts()
+    tags_list = get_zoho_reporting_tags()
 
     results = {"total": len(contras), "success": 0, "failed": 0, "errors": []}
 
     for contra in contras:
-        # Convert sqlite3.Row object to dict if necessary
         if hasattr(contra, 'keys'):
             contra_data = dict(contra)
-            if isinstance(contra_data.get('ledger_entries'), str):
-                try: contra_data['ledger_entries'] = json.loads(contra_data['ledger_entries'])
-                except: contra_data['ledger_entries'] = []
         else:
             contra_data = contra
 
-        success, error = create_zoho_transfer(token, contra_data, bank_account_map)
+        success, error = create_zoho_transfer(contra_data, bank_account_map, tags_list)
         if success:
             results["success"] += 1
         else:

@@ -16,7 +16,7 @@ sys.path.append(str(Path(__file__).parent.parent))
 try:
     import database_manager
 except ImportError:
-    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    print("️ Warning: Could not import database_manager. SQLite sync will be skipped.")
     database_manager = None
 
 # Load environment variables
@@ -189,7 +189,7 @@ def fetch_tally_purchase_orders(purchase_order_number="1"):
             v_no = v.find('VOUCHERNUMBER')
             if v_no and v_no.text.strip() == purchase_order_number:
                 vouchers.append(v)
-                print(f"[TALLY] ✓ Found Purchase Order #{purchase_order_number}")
+                print(f"[TALLY]  Found Purchase Order #{purchase_order_number}")
                 break
         
         if not vouchers:
@@ -1004,7 +1004,7 @@ def get_all_purchase_orders_data(from_date="20250401", to_date="20250430", limit
             }
         }
     except Exception as e:
-        print(f"❌ Error in get_all_purchase_orders_data: {e}")
+        print(f" Error in get_all_purchase_orders_data: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -1028,7 +1028,7 @@ def fetch_tally_purchase_orders_range(from_date="20250401", to_date="20250430", 
     </STATICVARIABLES></REQUESTDESC></EXPORTDATA></BODY></ENVELOPE>"""
 
     try:
-        print(f"📥 Fetching purchase orders from Tally ({from_date} to {to_date})...")
+        print(f" Fetching purchase orders from Tally ({from_date} to {to_date})...")
         response = requests.post(TALLY_URL, data=xml_request, timeout=90)
         soup = BeautifulSoup(response.content, 'lxml-xml')
         
@@ -1204,11 +1204,11 @@ def fetch_tally_purchase_orders_range(from_date="20250401", to_date="20250430", 
                 "total_amount": round(total_amount, 2)
             })
         
-        print(f"✅ Fetched {len(purchase_order_data)} purchase order(s)")
+        print(f" Fetched {len(purchase_order_data)} purchase order(s)")
         return purchase_order_data
     
     except Exception as e:
-        print(f"❌ Error fetching Tally purchase orders: {e}")
+        print(f" Error fetching Tally purchase orders: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -1223,7 +1223,7 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
       3. Tally port          — fallback only if DB is also empty for the range
     """
     try:
-        print("🚀 Starting Zoho Sync (Purchase Orders)...")
+        print(" Starting Zoho Sync (Purchase Orders)...")
 
         token = get_access_token()
         if not token:
@@ -1243,7 +1243,7 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
             orders_to_sync = selected_orders
             if limit and len(orders_to_sync) > limit:
                 orders_to_sync = orders_to_sync[:limit]
-            print(f"📊 Using {len(orders_to_sync)} selected purchase order(s) from frontend")
+            print(f" Using {len(orders_to_sync)} selected purchase order(s) from frontend")
 
         else:
             orders_to_sync = []
@@ -1260,16 +1260,16 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
                     if limit:
                         db_rows = db_rows[:limit]
                     orders_to_sync = db_rows
-                    print(f"📊 Loaded {len(orders_to_sync)} purchase order(s) from DB (no Tally call needed)")
+                    print(f" Loaded {len(orders_to_sync)} purchase order(s) from DB (no Tally call needed)")
 
             if not orders_to_sync:
-                print("🔄 DB empty for range — fetching from Tally port as fallback...")
+                print(" DB empty for range — fetching from Tally port as fallback...")
                 orders_to_sync = fetch_tally_purchase_orders_range(from_date, to_date, limit)
 
         if not orders_to_sync:
             return {"status": "error", "message": "No purchase orders to sync"}
 
-        print(f"📊 Syncing {len(orders_to_sync)} purchase order(s) to Zoho Books...")
+        print(f" Syncing {len(orders_to_sync)} purchase order(s) to Zoho Books...")
 
         stats = {"created": 0, "failed": 0, "errors": []}
 
@@ -1278,7 +1278,7 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
                                                 payment_terms_map, tax_map, tag_map, item_map)
             if result.get("success"):
                 stats["created"] += 1
-                print(f"✅ Synced Purchase Order #{po['purchase_order_number']}")
+                print(f" Synced Purchase Order #{po['purchase_order_number']}")
             else:
                 stats["failed"] += 1
                 stats["errors"].append({
@@ -1286,12 +1286,12 @@ def sync_purchase_orders_to_zoho(selected_orders=None, from_date="20250401", to_
                     "vendor":               po['vendor_name'],
                     "error":                result.get("error", "Unknown error")
                 })
-                print(f"❌ Failed Purchase Order #{po['purchase_order_number']}: {result.get('error')}")
+                print(f" Failed Purchase Order #{po['purchase_order_number']}: {result.get('error')}")
 
         return {"status": "success", "stats": stats}
 
     except Exception as e:
-        print(f"❌ Error in sync_purchase_orders_to_zoho: {e}")
+        print(f" Error in sync_purchase_orders_to_zoho: {e}")
         return {"status": "error", "message": str(e)}
 
 
@@ -1357,7 +1357,7 @@ def get_all_purchase_orders_data(from_date="20250401", to_date="20250430", limit
                 })
 
             database_manager.bulk_save_purchase_orders(db_data_list)
-            print(f"💾 Saved {len(orders)} purchase orders to database")
+            print(f" Saved {len(orders)} purchase orders to database")
 
         # ----------------------------------------------------------------
         # Build return stats
@@ -1376,7 +1376,7 @@ def get_all_purchase_orders_data(from_date="20250401", to_date="20250430", limit
         }
 
     except Exception as e:
-        print(f"❌ Error in get_all_purchase_orders_data: {e}")
+        print(f" Error in get_all_purchase_orders_data: {e}")
         import traceback
         traceback.print_exc()
         return None
@@ -1437,3 +1437,92 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
+def parse_tally_json(json_path):
+    import json, re
+    try:
+        with open(json_path, 'r', encoding='utf-16') as f: data = json.load(f)
+    except:
+        with open(json_path, 'r', encoding='utf-8') as f: data = json.load(f)
+    if isinstance(data, list) and len(data) > 0 and 'date' in data[0]: return data
+    vouchers = data.get('tallymessage', [])
+    if isinstance(vouchers, dict): vouchers = [vouchers]
+    
+    po_data = []
+    for v in vouchers:
+        if not isinstance(v, dict): continue
+        if 'vouchernumber' not in v and 'vouchertypename' not in v: continue
+        
+        v_date = str(v.get('date', '')).strip()
+        v_no = str(v.get('vouchernumber', '')).strip()
+        vendor_name = str(v.get('partyname', '')).strip()
+        narration = str(v.get('narration', '')).strip()
+        reference_number = str(v.get('reference', '')).strip()
+        
+        vendor_address = []
+        buyer_addr = v.get('basicbuyeraddress.list', v.get('basicbuyeraddress', []))
+        if not isinstance(buyer_addr, list): buyer_addr = [buyer_addr]
+        for addr in buyer_addr:
+            if isinstance(addr, dict) and 'basicbuyeraddress' in addr:
+                vendor_address.append(str(addr['basicbuyeraddress']).strip())
+            elif isinstance(addr, str): vendor_address.append(addr.strip())
+            
+        payment_terms = str(v.get('basicduedateofpymt', '')).strip()
+        order_status = str(v.get('orderstatus', 'Pending')).strip()
+        purchase_ledger = ""
+        
+        inventory_entries = v.get('inventoryentries.list', v.get('inventoryentries', v.get('allinventoryentries.list', v.get('allinventoryentries', []))))
+        if not isinstance(inventory_entries, list): inventory_entries = [inventory_entries]
+        for item in inventory_entries:
+            if isinstance(item, dict) and item.get('ledgername'):
+                purchase_ledger = str(item['ledgername']).strip()
+                break
+
+        ledger_entries = v.get('ledgerentries.list', v.get('ledgerentries', v.get('allledgerentries.list', v.get('allledgerentries', []))))
+        if not isinstance(ledger_entries, list): ledger_entries = [ledger_entries]
+        
+        if not purchase_ledger:
+            max_neg = 0
+            for entry in ledger_entries:
+                if not isinstance(entry, dict): continue
+                lname = str(entry.get('ledgername', '')).strip()
+                amt_str = str(entry.get('amount', '0'))
+                nums = re.findall(r'[-\d.]+', amt_str)
+                amt = float(nums[-1]) if nums else 0.0
+                lname_lower = lname.lower()
+                if lname == vendor_name or 'cgst' in lname_lower or 'sgst' in lname_lower or 'igst' in lname_lower or 'rounding' in lname_lower: continue
+                if amt < max_neg: max_neg = amt; purchase_ledger = lname
+
+        line_items = []
+        for item in inventory_entries:
+            if not isinstance(item, dict): continue
+            item_name = str(item.get('stockitemname', '')).strip()
+            quantity = str(item.get('actualqty', item.get('billedqty', '0'))).strip()
+            rate_str = str(item.get('rate', '0')).split('/')[0].strip()
+            nums = re.findall(r'[-\d.]+', rate_str)
+            rate = float(nums[-1]) if nums else 0.0
+            discount = str(item.get('discount', '0')).strip()
+            amt_str = str(item.get('amount', '0')).strip()
+            nums = re.findall(r'[-\d.]+', amt_str)
+            amount = float(nums[-1]) if nums else 0.0
+            line_items.append({"item_name": item_name, "quantity": quantity, "rate": rate, "discount": discount, "amount": abs(amount)})
+
+        taxes = []; rounding_off = 0.0
+        for entry in ledger_entries:
+            if not isinstance(entry, dict): continue
+            lname = str(entry.get('ledgername', '')).strip()
+            amt_str = str(entry.get('amount', '0'))
+            nums = re.findall(r'[-\d.]+', amt_str)
+            amt = float(nums[-1]) if nums else 0.0
+            lname_lower = lname.lower()
+            if ('cgst' in lname_lower or 'sgst' in lname_lower or 'igst' in lname_lower) and 'input' in lname_lower:
+                tax_rate = ""
+                if '%' in lname: tax_rate = lname.split('%')[0].split()[-1]
+                tax_type = "CGST" if 'cgst' in lname_lower else ("SGST" if 'sgst' in lname_lower else "IGST")
+                taxes.append({"tax_name": lname, "tax_type": tax_type, "rate": tax_rate, "amount": abs(amt)})
+            elif 'rounding' in lname_lower: rounding_off = float(nums[-1]) if nums else 0.0
+                
+        po_data.append({"purchase_order_number": v_no, "date": v_date, "vendor_name": vendor_name, "reference_number": reference_number, "vendor_address": vendor_address, "payment_terms": payment_terms, "order_status": order_status, "purchase_ledger": purchase_ledger, "line_items": line_items, "taxes": taxes, "rounding_off": rounding_off, "narration": narration})
+    return po_data
+

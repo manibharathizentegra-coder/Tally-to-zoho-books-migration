@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,24 +6,53 @@
     <title>Payments Made - Tally to Zoho Migration</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
-        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .nav-link.active { color: #d32f2f !important; font-weight: 500; border-bottom: 2px solid #d32f2f; }
-        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #d32f2f; transition: transform 0.2s; }
-        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
-        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
-        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
-        .payment-mode-badge { padding: 4px 12px; border-radius: 20px; font-size: 12px; font-weight: 500; }
-        .mode-cash { background: #e8f5e9; color: #2e7d32; }
-        .mode-bank { background: #e3f2fd; color: #1565c0; }
-        .mode-other { background: #fff3e0; color: #e65100; }
-    </style>
+        {% include '_sidebar_styles.html' %}
+    {% include '_zb_theme.html' %}
 </head>
 <body>
+    {% set active_page = 'payments_made' %}
+    <div class="app-shell">
+        {% include '_sidebar.html' %}
+        <main class="main">
+            {% set page_title = 'Payments Made' %}
+            {% set page_subtitle = 'Import payments made and sync to Zoho.' %}
+            {% set topbar_actions = '
+              <button onclick="syncZoho()" class="btn btn-outline-primary btn-sm d-flex align-items-center">
+                <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
+              </button>
+              <button id="paymentsStopBtn" onclick="stopPaymentsJob()" class="btn btn-outline-danger btn-sm d-flex align-items-center" disabled>
+                <i class="bi bi-stop-circle me-2"></i> Stop
+              </button>
+              <button onclick="fetchData()" class="btn btn-primary btn-sm d-flex align-items-center">
+                <i class="bi bi-cloud-download me-2"></i> Import Payments
+              </button>
+            ' %}
+            {% include '_topbar.html' %}
+
+            {% set steps_title = 'Payments Made: Recommended Steps' %}
+            {% set steps = [
+              'Confirm Vendors + Ledgers are synced to Zoho.',
+              'Import payments made XML into the active DB.',
+              'Review payment mode/account mapping.',
+              'Sync to Zoho and download failures for manual correction.'
+            ] %}
+            {% include '_steps_card.html' %}
+
+
+
+            <!-- LIVE CONSOLE -->
+            <div id="paymentsConsoleCard" class="content-card p-3 mb-4" style="display:none;">
+              <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+                <div class="fw-semibold"><i class="bi bi-terminal me-2"></i>Console</div>
+                <div class="small text-muted" id="paymentsConsoleStatus">Idle</div>
+              </div>
+              <pre id="paymentsConsole" class="mb-0 p-3 rounded-3 bg-dark text-light small" style="max-height: 260px; overflow:auto; white-space: pre-wrap;"></pre>
+              <div class="d-flex justify-content-end mt-2">
+                <button class="btn btn-sm btn-outline-secondary" onclick="clearPaymentsConsole()">
+                  <i class="bi bi-trash3 me-1"></i> Clear
+                </button>
+              </div>
+            </div>
 
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
@@ -58,6 +87,12 @@
                     <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
                 </li>
                 <li class="nav-item me-3">
+                    <a class="nav-link" href="/credit_note"><i class="bi bi-file-earmark-minus me-1"></i> Credit Note</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/debit_note"><i class="bi bi-file-earmark-plus me-1"></i> Debit Note</a>
+                </li>
+                <li class="nav-item me-3">
                     <a class="nav-link" href="/sales_orders"><i class="bi bi-cart-check me-1"></i> Sales Orders</a>
                 </li>
                 <li class="nav-item me-3">
@@ -70,7 +105,7 @@
         </div>
     </nav>
 
-    <div class="container-fluid py-4 px-4">
+    <div class="container-fluid p-0">
 
         <!-- HEADER & ACTIONS -->
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -115,6 +150,21 @@
             </div>
         </div>
 
+        
+        <!-- SPLIT ACTIONS & TABS -->
+        <div class="mb-4">
+            <button onclick="splitExpenses()" id="splitBtn" class="btn btn-warning mb-3">
+                <i class="bi bi-diagram-2 me-2"></i> Split Expenses
+            </button>
+            <ul class="nav nav-tabs" id="paymentsTabs" role="tablist">
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link active fw-bold" id="vendor-tab" data-bs-toggle="tab" data-bs-target="#vendor-pane" type="button" role="tab" onclick="activeTab='vendor'; renderPayments()">Vendor Payments (<span id="vendorCount">0</span>)</button>
+                </li>
+                <li class="nav-item" role="presentation">
+                    <button class="nav-link fw-bold text-warning" id="expense-tab" data-bs-toggle="tab" data-bs-target="#expense-pane" type="button" role="tab" onclick="activeTab='expense'; renderPayments()">Expenses (<span id="expenseCount">0</span>)</button>
+                </li>
+            </ul>
+        </div>
         <!-- KPI CARDS -->
         <div class="row g-3 mb-4">
             <div class="col-md-6">
@@ -126,7 +176,7 @@
             <div class="col-md-6">
                 <div class="kpi-card" style="border-color: #c62828;">
                     <div class="kpi-label">Total Amount Paid</div>
-                    <div class="kpi-value text-danger" id="total-amount">₹0</div>
+                    <div class="kpi-value text-danger" id="total-amount">0</div>
                 </div>
             </div>
         </div>
@@ -177,10 +227,18 @@
         </div>
     </div>
 
+      </main>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+        
         let allPayments = [];
+        let vendorPayments = [];
+        let expensePayments = [];
+        let activeTab = 'vendor';
         let totalAmount = 0;
+    
 
         document.addEventListener('DOMContentLoaded', async () => {
             try {
@@ -191,7 +249,7 @@
                         allPayments = data.payments;
                         totalAmount = data.total_amount;
                         updateKPIs();
-                        renderPayments(allPayments);
+                        updateTabCounts(); renderPayments();
                         console.log('Loaded payments made from database');
                         return;
                     }
@@ -207,7 +265,7 @@
                     allPayments = data.payments || [];
                     totalAmount = data.total_amount || 0;
                     updateKPIs();
-                    renderPayments(allPayments);
+                    updateTabCounts(); renderPayments();
                     console.log('Loaded payments made from localStorage');
                 } catch(e) {}
             }
@@ -251,7 +309,7 @@
                         total_amount: totalAmount
                     }));
                     updateKPIs();
-                    renderPayments(allPayments);
+                    updateTabCounts(); renderPayments();
                 }
             } catch (error) {
                 alert('Upload failed: ' + error.message);
@@ -304,7 +362,7 @@
                 }
 
                 updateKPIs();
-                renderPayments(allPayments);
+                updateTabCounts(); renderPayments();
 
             } catch (err) {
                 console.error(err);
@@ -337,17 +395,17 @@
                 const data = await res.json();
 
                 if (data.status === 'success') {
-                    let msg = '✅ Zoho Sync Complete!\n\n';
+                    let msg = ' Zoho Sync Complete!\n\n';
                     msg += `Total: ${data.total} | Success: ${data.success} | Failed: ${data.failed}\n\n`;
                     if (data.failed > 0 && data.errors) {
-                        msg += '⚠️ Failed:\n';
+                        msg += ' Failed:\n';
                         data.errors.forEach((e, i) => {
                             msg += `${i+1}. #${e.payment_number} - ${e.vendor}: ${e.error}\n`;
                         });
                     }
                     alert(msg);
                 } else {
-                    alert('❌ Sync Error: ' + data.message);
+                    alert(' Sync Error: ' + data.message);
                 }
             } catch (err) {
                 alert('Connection Error during Sync');
@@ -359,37 +417,67 @@
 
         function updateKPIs() {
             document.getElementById('total-payments').innerText = allPayments.length;
-            document.getElementById('total-amount').innerText = '₹' + (totalAmount || 0).toLocaleString();
+            document.getElementById('total-amount').innerText = '' + (totalAmount || 0).toLocaleString();
         }
 
         function getModeBadge(mode) {
             if (!mode) return '<span class="payment-mode-badge mode-other">Unknown</span>';
             const m = mode.toLowerCase();
-            if (m.includes('cash')) return '<span class="payment-mode-badge mode-cash">💵 Cash</span>';
-            if (m.includes('bank')) return '<span class="payment-mode-badge mode-bank">🏦 Bank</span>';
+            if (m.includes('cash')) return '<span class="payment-mode-badge mode-cash"> Cash</span>';
+            if (m.includes('bank')) return '<span class="payment-mode-badge mode-bank"> Bank</span>';
             return '<span class="payment-mode-badge mode-other">' + mode + '</span>';
         }
 
-        function renderPayments(payments) {
+        
+        function renderPayments(customData = null) {
+            let dataToRender = customData;
+            
+            if (!customData) {
+                if (vendorPayments.length > 0 || expensePayments.length > 0) {
+                    dataToRender = activeTab === 'vendor' ? vendorPayments : expensePayments;
+                } else {
+                    if (activeTab === 'expense') {
+                        dataToRender = []; // nothing split yet
+                    } else {
+                        dataToRender = allPayments;
+                    }
+                }
+            }
+            
             const tbody = document.getElementById('tableBody');
-            if (!payments || payments.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No Payments Made Found</td></tr>';
+            
+            const count = dataToRender.length;
+            const amt = dataToRender.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
+            document.getElementById('total-payments').innerText = count;
+            document.getElementById('total-amount').innerText = '' + amt.toLocaleString();
+
+            if (!dataToRender || dataToRender.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="6" class="text-center py-4 text-muted">No records found for this view</td></tr>';
                 return;
             }
-            tbody.innerHTML = payments.map((p, i) => `
-                <tr style="cursor:pointer" onclick="showDetails(${i})">
-                    <td class="fw-medium text-danger">${p.payment_number || '-'}</td>
+
+            tbody.innerHTML = dataToRender.map((p, idx) => {
+                const realIdx = allPayments.indexOf(p);
+                const clickIdx = realIdx !== -1 ? realIdx : idx;
+                
+                return `
+                <tr style="cursor: pointer;" onclick="showDetails(${clickIdx})">
+                    <td class="fw-medium text-danger">${p.payment_number}</td>
                     <td>${formatDate(p.date)}</td>
-                    <td>${p.vendor_name || '-'}</td>
-                    <td>${getModeBadge(p.payment_mode)}</td>
-                    <td class="text-end fw-bold text-danger">₹${(p.amount || 0).toLocaleString()}</td>
+                    <td>${p.vendor_name}</td>
+                    <td>
+                        <span class="badge ${p.payment_mode === 'Cash' ? 'bg-success' : 'bg-primary'}">
+                            ${p.payment_mode || 'Bank'}
+                        </span>
+                    </td>
+                    <td class="text-end fw-bold">${parseFloat(p.amount).toLocaleString()}</td>
                     <td class="text-center">
-                        <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDetails(${i})">
+                        <button class="btn btn-sm btn-outline-danger" onclick="event.stopPropagation(); showDetails(${clickIdx})">
                             <i class="bi bi-eye"></i> View
                         </button>
                     </td>
-                </tr>
-            `).join('');
+                </tr>`;
+            }).join('');
         }
 
         function showDetails(idx) {
@@ -397,23 +485,23 @@
             const modal = new bootstrap.Modal(document.getElementById('paymentModal'));
 
             const billRows = (p.bill_allocations || []).map(a =>
-                `<tr><td>${a.bill_type || 'Agst Ref'}</td><td><strong>${a.bill_number}</strong></td><td class="text-end">₹${(a.amount || 0).toLocaleString()}</td></tr>`
+                `<tr><td>${a.bill_type || 'Agst Ref'}</td><td><strong>${a.bill_number}</strong></td><td class="text-end">${(a.amount || 0).toLocaleString()}</td></tr>`
             ).join('');
 
             const ledgerRows = (p.ledger_entries || []).map(e =>
                 `<tr>
                     <td>${e.ledger_name}</td>
                     <td class="text-end ${e.amount < 0 ? 'text-danger' : 'text-success'}">
-                        ${e.amount < 0 ? '(-)' : ''}₹${Math.abs(e.amount || 0).toLocaleString()} ${e.amount < 0 ? 'Dr' : 'Cr'}
+                        ${e.amount < 0 ? '(-)' : ''}${Math.abs(e.amount || 0).toLocaleString()} ${e.amount < 0 ? 'Dr' : 'Cr'}
                     </td>
-                    <td class="text-end text-muted">${e.current_balance ? '₹' + e.current_balance.toLocaleString() + ' Cr' : '-'}</td>
+                    <td class="text-end text-muted">${e.current_balance ? '' + e.current_balance.toLocaleString() + ' Cr' : '-'}</td>
                 </tr>`
             ).join('');
 
             const costCenterRows = (p.cost_center_allocations || []).map(cc =>
                 `<tr>
                     <td>${cc.category || 'Unknown'}</td>
-                    <td class="text-end text-danger border-start">₹${(cc.amount || 0).toLocaleString()}</td>
+                    <td class="text-end text-danger border-start">${(cc.amount || 0).toLocaleString()}</td>
                 </tr>`
             ).join('');
 
@@ -425,7 +513,7 @@
                             <tr><th width="40%">Payment #:</th><td>${p.payment_number || '-'}</td></tr>
                             <tr><th>Date:</th><td>${formatDate(p.date)}</td></tr>
                             <tr><th>Vendor:</th><td>${p.vendor_name || '-'}</td></tr>
-                            <tr><th>Amount:</th><td class="fw-bold text-danger">₹${(p.amount || 0).toLocaleString()}</td></tr>
+                            <tr><th>Amount:</th><td class="fw-bold text-danger">${(p.amount || 0).toLocaleString()}</td></tr>
                         </table>
                     </div>
                     <div class="col-md-6">
@@ -460,9 +548,9 @@
                         <h6 class="text-danger border-bottom pb-2">Ledger Breakdown</h6>
                         <table class="table table-sm table-bordered">
                             <thead class="table-light"><tr><th>Ledger</th><th class="text-end">Amount</th><th class="text-end">Balance</th></tr></thead>
-                            <tbody>${ledgerRows}<tr class="table-light fw-bold"><td>Total Paid</td><td class="text-end text-danger">₹${(p.amount || 0).toLocaleString()}</td><td></td></tr></tbody>
+                            <tbody>${ledgerRows}<tr class="table-light fw-bold"><td>Total Paid</td><td class="text-end text-danger">${(p.amount || 0).toLocaleString()}</td><td></td></tr></tbody>
                         </table>
-                    </div>` : `<div class="alert alert-info mt-3"><i class="bi bi-info-circle me-2"></i>Advance payment — no specific bill allocations.</div>`}
+                    </div>` : `<div class="alert alert-info mt-3"><i class="bi bi-info-circle me-2"></i>Advance payment  no specific bill allocations.</div>`}
             `;
             modal.show();
         }
@@ -476,6 +564,194 @@
             );
             renderPayments(filtered);
         }
+    
+        async function splitExpenses() {
+            if (allPayments.length === 0) {
+                alert("No payments available to split. Please fetch data first.");
+                return;
+            }
+            
+            const btn = document.getElementById('splitBtn');
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Splitting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch('/api/payments/split_expenses', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({ payments: allPayments })
+                });
+                const data = await res.json();
+                
+                if (data.status === 'success') {
+                    // Overwrite the local arrays entirely with the source of truth from DB
+                    vendorPayments = data.vendor_payments || [];
+                    expensePayments = data.expenses || [];
+                    // Rebuild allPayments so indices match correctly
+                    allPayments = [...vendorPayments, ...expensePayments];
+                    
+                    updateTabCounts();
+                    renderPayments();
+                    alert(data.message);
+                } else {
+                    alert('Error: ' + data.error);
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Connection Error');
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+        
+        function updateTabCounts() {
+            if (vendorPayments.length === 0 && expensePayments.length === 0) {
+                // Initial load, haven't split yet
+                document.getElementById('vendorCount').innerText = allPayments.length;
+                document.getElementById('expenseCount').innerText = '0';
+            } else {
+                document.getElementById('vendorCount').innerText = vendorPayments.length;
+                document.getElementById('expenseCount').innerText = expensePayments.length;
+            }
+        }
+    
+
+    // --------------------------------------------------
+    // Job-based Import (SSE live console)
+    // --------------------------------------------------
+    let _paymentsJobId = null;
+    let _paymentsES = null;
+
+    function _showPaymentsConsole(show=true) {
+      const card = document.getElementById('paymentsConsoleCard');
+      if (card) card.style.display = show ? '' : 'none';
+    }
+
+    function clearPaymentsConsole() {
+      const pre = document.getElementById('paymentsConsole');
+      if (pre) pre.textContent = '';
+    }
+
+    function _appendPaymentsLine(line) {
+      const pre = document.getElementById('paymentsConsole');
+      if (!pre) return;
+      pre.textContent += (line || '') + "\\n";
+      pre.scrollTop = pre.scrollHeight;
+    }
+
+    function _setPaymentsConsoleStatus(text) {
+      const el = document.getElementById('paymentsConsoleStatus');
+      if (el) el.textContent = text || '';
+    }
+
+    function _setPaymentsButtons(running) {
+      const stopBtn = document.getElementById('paymentsStopBtn');
+      const fetchBtn = document.querySelector("button[onclick='fetchData()']") || document.querySelector('.btn-primary');
+      const syncBtn = document.querySelector("button[onclick='syncZoho()']") || document.querySelector('.btn-outline-primary');
+      if (fetchBtn) fetchBtn.disabled = !!running;
+      if (syncBtn) syncBtn.disabled = !!running;
+      if (stopBtn) stopBtn.disabled = !running;
+    }
+
+    async function stopPaymentsJob() {
+      if (!_paymentsJobId) return;
+      try {
+        await fetch(`/api/jobs/${_paymentsJobId}/stop`, { method: 'POST' });
+        _appendPaymentsLine('Stop requested.');
+        _setPaymentsConsoleStatus('Stopping...');
+      } catch (e) {
+        _appendPaymentsLine('Failed to request stop: ' + (e?.message || e));
+      }
+    }
+
+    async function _startPaymentsJob(url, payload, onDone) {
+      if (_paymentsES) {
+        try { _paymentsES.close(); } catch (e) {}
+        _paymentsES = null;
+      }
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload || {}),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.status !== 'success' || !data.job_id) {
+        throw new Error(data.message || data.error || 'Failed to start job');
+      }
+      _paymentsJobId = data.job_id;
+      _appendPaymentsLine('Job ID: ' + _paymentsJobId);
+      _setPaymentsConsoleStatus('Running...');
+      _paymentsES = new EventSource(`/api/jobs/${_paymentsJobId}/stream`);
+      _paymentsES.addEventListener('log', (ev) => {
+        try {
+          const d = JSON.parse(ev.data || '{}');
+          if (d.message) _appendPaymentsLine(d.message);
+        } catch (e) {}
+      });
+      _paymentsES.addEventListener('done', (ev) => {
+        let d = {};
+        try { d = JSON.parse(ev.data || '{}'); } catch (e) {}
+        const result = d.result || {};
+        if (_paymentsES) {
+          try { _paymentsES.close(); } catch (e) {}
+          _paymentsES = null;
+        }
+        _setPaymentsButtons(false);
+        _setPaymentsConsoleStatus(result.status || 'done');
+        if (typeof onDone === 'function') onDone(result);
+      });
+    }
+
+    async function fetchData() {
+      const btn = document.querySelector("button[onclick='fetchData()']") || document.querySelector('.btn-primary');
+      const originalText = btn ? btn.innerHTML : '';
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Importing...';
+      }
+
+      _showPaymentsConsole(true);
+      clearPaymentsConsole();
+      _setPaymentsConsoleStatus('Starting...');
+      _setPaymentsButtons(true);
+
+      try {
+        const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+        const toDate = formatDateForAPI(document.getElementById('toDate').value);
+        const limit = document.getElementById('limitInput').value || null;
+
+        await _startPaymentsJob('/api/payments_made/fetch/start', {
+          from_date: fromDate,
+          to_date: toDate,
+          limit: limit ? parseInt(limit) : null,
+        }, async () => {
+          try {
+            const dbRes = await fetch('/api/db/payments_made');
+            if (dbRes.ok) {
+              const dbData = await dbRes.json();
+              allPayments = dbData.payments || [];
+              totalAmount = dbData.total_amount || 0;
+              localStorage.setItem('paymentsData', JSON.stringify(dbData));
+              updateKPIs();
+              renderPayments(allPayments);
+              updateTabCounts();
+            }
+          } catch (e) {}
+        });
+      } catch (err) {
+        console.error(err);
+        alert('Error: ' + (err.message || err));
+        _setPaymentsButtons(false);
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.innerHTML = originalText;
+        }
+      }
+    }
+
     </script>
 </body>
 </html>

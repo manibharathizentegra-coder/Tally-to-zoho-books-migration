@@ -1,4 +1,4 @@
-<!doctype html>
+﻿<!doctype html>
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
@@ -19,148 +19,137 @@
       rel="stylesheet"
     />
 
-    <style>
-      body {
-        font-family: "Roboto", sans-serif;
-        background: #f0f2f5;
-      }
-      .navbar {
-        background: #fff;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
-      }
-      .nav-link.active {
-        color: #5e35b1 !important;
-        font-weight: 500;
-        border-bottom: 2px solid #5e35b1;
-      }
-
-      /* KPI Cards */
-      .kpi-card {
-        background: #fff;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        border-left: 4px solid #5e35b1;
-        transition: transform 0.2s;
-      }
-      .kpi-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
-      }
-      .kpi-value {
-        font-size: 28px;
-        font-weight: 700;
-        color: #333;
-      }
-      .kpi-label {
-        font-size: 13px;
-        color: #666;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
-
-      .content-card {
-        background: #fff;
-        border-radius: 12px;
-        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-        overflow: hidden;
-      }
-      .table thead th {
-        font-weight: 600;
-        color: #555;
-        background: #f8f9fa;
-        border-bottom: 2px solid #eee;
-      }
-    </style>
+    {% include '_sidebar_styles.html' %}
+    {% include '_zb_theme.html' %}
   </head>
   <body>
-    <!-- NAVBAR -->
-    <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
-      <a class="navbar-brand d-flex align-items-center" href="#">
-        <i class="bi bi-wallet2 text-primary fs-3 me-2"></i>
-        <span class="fw-bold text-primary">Zen Migration</span>
-      </a>
-      <div class="collapse navbar-collapse ms-4">
-        <ul class="navbar-nav me-auto mb-2 mb-lg-0">
-          <li class="nav-item me-3">
-            <a class="nav-link" href="/ledgers">
-              <i class="bi bi-journal-text me-1"></i> Ledgers
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link active" href="/items">
-              <i class="bi bi-box-seam me-1"></i> Items
-            </a>
-          </li>
-          <li class="nav-item me-3">
-            <a class="nav-link" href="/journals">
-              <i class="bi bi-journal-bookmark me-1"></i> Journals
-            </a>
-          </li>
-          <li class="nav-item me-3">
-            <a class="nav-link" href="/invoices">
-              <i class="bi bi-receipt me-1"></i> Invoices
-            </a>
-          </li>
-          <li class="nav-item me-3">
-            <a class="nav-link" href="/bills">
-              <i class="bi bi-file-earmark-text me-1"></i> Bills
-            </a>
-          </li>
-          <li class="nav-item me-3">
-            <a class="nav-link" href="/receipts">
-              <i class="bi bi-cash-coin me-1"></i> Payment Received
-            </a>
-          </li>
-          <li class="nav-item me-3">
-              <a class="nav-link" href="/payments_made">
-                  <i class="bi bi-cash-stack me-1"></i> Payments Made
-              </a>
-          </li>
-                <li class="nav-item me-3">
-                    <a class="nav-link" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
-                </li>
-          <li class="nav-item me-3">
-            <a class="nav-link" href="/sales_orders">
-              <i class="bi bi-cart-check me-1"></i> Sales Orders
-            </a>
-          </li>
-          <li class="nav-item me-3">
-            <a class="nav-link" href="/purchase_orders">
-              <i class="bi bi-bag-check me-1"></i> Purchase Orders
-            </a>
-          </li>
-          <li class="nav-item">
-            <a class="nav-link" href="/opening-balance">
-              <i class="bi bi-bank me-1"></i> Opening Balance
-            </a>
-          </li>
-        </ul>
-      </div>
-    </nav>
+    {% set active_page = 'items' %}
+    <div class="app-shell">
+      {% include '_sidebar.html' %}
 
-    <div class="container-fluid py-4 px-4">
-      <!-- HEADER & ACTIONS -->
-      <div class="d-flex justify-content-between align-items-center mb-4">
-        <div>
-          <h4 class="fw-bold mb-1">Items Inventory</h4>
-          <p class="text-muted small mb-0">
-            Manage stock items, HSN codes, and pricing
-          </p>
-        </div>
-        <div class="d-flex gap-2">
-          <button
-            onclick="syncZoho()"
-            class="btn btn-outline-primary d-flex align-items-center"
-          >
+      <!-- MAIN -->
+      <main class="main">
+        {% set page_title = 'Items' %}
+        {% set page_subtitle = 'Import from Tally, sync to Zoho, and apply opening stock adjustments.' %}
+        {% set topbar_actions = '
+          <button onclick="syncZoho()" class="btn btn-outline-primary btn-sm d-flex align-items-center">
             <i class="bi bi-arrow-repeat me-2"></i> Sync to Zoho
           </button>
-          <button
-            onclick="fetchData()"
-            class="btn btn-primary d-flex align-items-center"
-          >
+          <button id="itemsSyncStopBtn" onclick="stopItemsSync()" class="btn btn-outline-danger btn-sm d-flex align-items-center" disabled>
+            <i class="bi bi-stop-circle me-2"></i> Stop
+          </button>
+          <button onclick="fetchData()" class="btn btn-primary btn-sm d-flex align-items-center">
             <i class="bi bi-cloud-download me-2"></i> Import All Items
           </button>
+        ' %}
+        {% include '_topbar.html' %}
+
+        {% set steps_title = 'Items: Recommended Steps' %}
+        {% set steps = [
+          'Import Items XML into the DB and verify total count.',
+          'Sync to Zoho (creates/updates items, applies tax + custom field mapping).',
+          'Run Inventory Adjustment to push opening stock into MAIN WAREHOUSE.'
+        ] %}
+        {% include '_steps_card.html' %}
+
+        <div class="container-fluid p-0">
+
+       <!-- LIVE CONSOLE (ITEMS SYNC) -->
+       <div id="itemsSyncConsoleCard" class="content-card p-3 mb-4" style="display:none;">
+         <div class="d-flex flex-wrap gap-2 justify-content-between align-items-center mb-2">
+           <div class="fw-semibold">
+             <i class="bi bi-terminal me-2"></i>Sync Console
+           </div>
+           <div class="small text-muted" id="itemsSyncConsoleStatus">Idle</div>
+         </div>
+         <pre id="itemsSyncConsole" class="mb-0 p-3 rounded-3 bg-dark text-light small" style="max-height: 260px; overflow:auto; white-space: pre-wrap;"></pre>
+         <div class="d-flex justify-content-end mt-2">
+           <button class="btn btn-sm btn-outline-secondary" onclick="clearItemsSyncConsole()">
+             <i class="bi bi-trash3 me-1"></i> Clear
+           </button>
+         </div>
+       </div>
+
+       <!-- IMPORT ITEMS XML -->
+       <div class="content-card p-3 mb-4">
+         <div class="row g-3 align-items-end">
+          <div class="col-lg-8">
+             <label class="form-label small text-muted mb-1">Import Items XML</label>
+             <input id="itemsXmlFile" type="file" accept=".xml" class="form-control" />
+             <div class="form-text">Upload a Tally exported Items XML file (Stock Groups + Stock Items).</div>
+           </div>
+           <div class="col-lg-4 d-flex justify-content-lg-end">
+             <button class="btn btn-outline-success btn-inline btn-nowrap" onclick="importItemsXml()">
+               <i class="bi bi-file-earmark-arrow-up me-1"></i> Import XML
+             </button>
+           </div>
+         </div>
+         <div id="itemsImportResult" class="small text-muted mt-2"></div>
+       </div>
+
+      <!-- INVENTORY ADJUSTMENT (OPENING STOCK) -->
+      <div class="content-card p-3 mb-4">
+        <div class="row g-3 align-items-center">
+          <div class="col-lg-8">
+            <div class="fw-semibold">Inventory Adjustment (Opening Stock)</div>
+            <div class="small text-muted">
+              Step 1: Upload your Excel + Tally XML -> Step 2: Preview (see negatives) -> Step 3: Apply to Zoho.
+              <span class="text-muted">This tool updates Opening Stock in <b>MAIN WAREHOUSE only</b>.</span>
+            </div>
+          </div>
+          <div class="col-lg-4 d-flex justify-content-lg-end">
+            <div class="d-flex gap-2 flex-wrap">
+              <button id="invAdjPreviewBtn" class="btn btn-outline-primary btn-inline btn-nowrap" onclick="previewInventoryAdjustment()">
+                <i class="bi bi-eye me-1"></i> Preview
+              </button>
+              <button id="invAdjApplyBtn" class="btn btn-success btn-inline btn-nowrap" onclick="applyInventoryAdjustment()" disabled>
+                <i class="bi bi-check2-circle me-1"></i> Apply to Zoho
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div class="row g-3 align-items-end mt-2">
+          <div class="col-lg-4">
+            <label class="form-label small text-muted mb-1">Opening Stock Excel (.xlsx)</label>
+            <input id="invAdjExcel" type="file" accept=".xlsx" class="form-control" />
+          </div>
+          <div class="col-lg-4">
+            <label class="form-label small text-muted mb-1">Godown Summary XML (.xml)</label>
+            <input id="invAdjXml" type="file" accept=".xml" class="form-control" />
+          </div>
+          <div class="col-lg-4">
+            <div class="form-text">If items are missing IDs, click "Fetch Zoho Item IDs (Fast)" once, then Apply.</div>
+            <div class="mt-2">
+              <button id="invAdjRefreshMapBtn" class="btn btn-sm btn-outline-secondary btn-inline btn-nowrap" onclick="refreshZohoItemMap()">
+                <i class="bi bi-arrow-down-circle me-1"></i> Fetch Zoho Item IDs (Fast)
+              </button>
+              <span id="invAdjRefreshMapResult" class="small text-muted ms-2"></span>
+            </div>
+          </div>
+        </div>
+        <div id="invAdjResult" class="mt-3"></div>
+      </div>
+
+      <!-- GODOWN XML -> TRANSFER EXCEL -->
+      <div class="content-card p-3 mb-4">
+        <div class="d-flex justify-content-between align-items-center">
+          <div>
+            <div class="fw-semibold">Godown XML → Transfer Excel</div>
+            <div class="small text-muted">Convert a MAIN-warehouse Godown Summary XML into the same 4-column Excel format used for stock transfer.</div>
+          </div>
+        </div>
+        <div class="row g-3 align-items-end mt-1">
+          <div class="col-lg-6">
+            <label class="form-label small text-muted mb-1">Godown Summary XML (.xml)</label>
+            <input id="transferXmlFile" type="file" accept=".xml" class="form-control" />
+          </div>
+          <div class="col-lg-6">
+            <button id="transferXmlBtn" class="btn btn-outline-secondary" onclick="downloadTransferExcel()">
+              <i class="bi bi-file-earmark-excel me-1"></i> Download Excel
+            </button>
+            <div id="transferXmlResult" class="small text-muted mt-2"></div>
+          </div>
         </div>
       </div>
 
@@ -182,7 +171,7 @@
         <div class="col-md-4">
           <div class="kpi-card" style="border-color: #43a047">
             <div class="kpi-label">Stock Value</div>
-            <div class="kpi-value" id="total-value">₹0</div>
+        <div class="kpi-value" id="total-value">₹0</div>
           </div>
         </div>
        
@@ -212,9 +201,9 @@
                 <th>Item Name</th>
                 <th>Group</th>
                 <th>Category</th>
-                <th>HSN/SAC</th>
-                <th>GST %</th>
-                <th>Duty %</th>
+                <th class="hsn-col">HSN/SAC</th>
+                <th class="tax-col">GST %</th>
+                <th class="tax-col">Duty %</th>
                 <th>Stock</th>
                 <th class="text-end">Value</th>
               </tr>
@@ -249,9 +238,12 @@
           data-bs-dismiss="offcanvas"
         ></button>
       </div>
-      <div class="offcanvas-body" id="offcanvasBody">
-        <!-- Details loaded here -->
-      </div>
+    <div class="offcanvas-body" id="offcanvasBody">
+      <!-- Details loaded here -->
+    </div>
+  </div>
+
+      </main>
     </div>
 
     <!-- SCRIPTS -->
@@ -259,12 +251,60 @@
     <script>
       let allItems = [];
       let stats = {};
+      let invAdjPreviewReady = false;
 
 
-      // Load data on startup
+      // Load data on startup (uses the active Company DB from topbar switcher)
       document.addEventListener("DOMContentLoaded", () => {
           loadFromDB();
       });
+
+      async function importItemsXml() {
+          const fileInp = document.getElementById('itemsXmlFile');
+          const result = document.getElementById('itemsImportResult');
+
+          const file = fileInp && fileInp.files ? fileInp.files[0] : null;
+          if (!file) { alert('Choose an Items XML file first'); return; }
+
+          const ev = (typeof window !== 'undefined' && window.event) ? window.event : null;
+          const btn = ev && ev.target ? ev.target.closest('button') : null;
+          const originalText = btn ? btn.innerHTML : '';
+          if (btn) {
+              btn.disabled = true;
+              btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Importing...';
+          }
+          if (result) result.textContent = 'Import running...';
+
+           try {
+               const fd = new FormData();
+               fd.append('items_file', file);
+
+               const res = await fetch('/api/db/import-items-xml', { method: 'POST', body: fd });
+               const data = await res.json().catch(() => ({}));
+
+              if (!res.ok || data.error) {
+                  throw new Error(data.error || ('Import failed (HTTP ' + res.status + ')'));
+              }
+
+              if (result) {
+                  const g = data.imported && data.imported.groups_count != null ? data.imported.groups_count : '?';
+                  const i = data.imported && data.imported.items_count != null ? data.imported.items_count : '?';
+                  result.textContent = `Imported: ${g} stock groups, ${i} items (DB: ${data.active_db || ''})`;
+              }
+
+               if (fileInp) fileInp.value = '';
+
+               await loadFromDB();
+           } catch (e) {
+               if (result) result.textContent = 'Import failed: ' + e.message;
+               alert('Import failed: ' + e.message);
+          } finally {
+              if (btn) {
+                  btn.disabled = false;
+                  btn.innerHTML = originalText;
+              }
+          }
+      }
 
       async function loadFromDB() {
           try {
@@ -317,14 +357,124 @@
         }
       }
 
-      async function syncZoho() {
-        if (!confirm("This will sync ALL fetched items to Zoho Books. Continue?"))
-          return;
+      let _itemsSyncJobId = null;
+      let _itemsSyncES = null;
 
-        const btn = document.querySelector(".btn-outline-primary");
-        const originalText = btn.innerHTML;
-        btn.disabled = true;
-        btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+      function _showItemsSyncConsole(show=true) {
+        const card = document.getElementById('itemsSyncConsoleCard');
+        if (card) card.style.display = show ? '' : 'none';
+      }
+
+      function clearItemsSyncConsole() {
+        const pre = document.getElementById('itemsSyncConsole');
+        if (pre) pre.textContent = '';
+      }
+
+      function _appendItemsSyncLine(line) {
+        const pre = document.getElementById('itemsSyncConsole');
+        if (!pre) return;
+        pre.textContent += (line || '') + "\n";
+        pre.scrollTop = pre.scrollHeight;
+      }
+
+      function _setItemsSyncConsoleStatus(text) {
+        const el = document.getElementById('itemsSyncConsoleStatus');
+        if (el) el.textContent = text || '';
+      }
+
+      function _setItemsSyncButtons(running) {
+        const stopBtn = document.getElementById('itemsSyncStopBtn');
+        const syncBtn = document.querySelector("button[onclick='syncZoho()']") || document.querySelector(".btn-outline-primary");
+        if (syncBtn) syncBtn.disabled = !!running;
+        if (stopBtn) stopBtn.disabled = !running;
+      }
+
+      async function stopItemsSync() {
+        if (!_itemsSyncJobId) return;
+        try {
+          await fetch(`/api/jobs/${_itemsSyncJobId}/stop`, { method: 'POST' });
+          _appendItemsSyncLine('Stop requested.');
+          _setItemsSyncConsoleStatus('Stopping...');
+        } catch (e) {
+          _appendItemsSyncLine('Failed to request stop: ' + (e?.message || e));
+        }
+      }
+
+      function _renderItemsSyncResult(resultDiv, result) {
+        const s = result.stats || {};
+        const failed = result.failed_items || [];
+        const isStopped = result.status === 'stopped';
+        const alertClass = isStopped ? 'alert-warning' : (s.failed > 0 ? 'alert-warning' : 'alert-success');
+
+        let html = `
+          <div class="alert ${alertClass} border-0 shadow-sm mt-2">
+            <div class="fw-bold mb-2">
+              <i class="bi ${isStopped ? 'bi-stop-circle-fill text-warning' : (s.failed > 0 ? 'bi-exclamation-triangle-fill text-warning' : 'bi-check-circle-fill text-success')} me-2"></i>
+              ${isStopped ? 'Items Sync Stopped' : 'Items Sync Complete'}
+            </div>
+            <div class="d-flex gap-4 flex-wrap">
+              <span><strong class="text-success">${s.created || 0}</strong> Created</span>
+              <span><strong class="text-primary">${s.updated || 0}</strong> Updated</span>
+              <span><strong class="text-secondary">${s.skipped || 0}</strong> Skipped</span>
+              <span><strong class="text-danger">${s.failed || 0}</strong> Failed</span>
+            </div>
+          </div>`;
+
+        if (failed.length > 0) {
+          const rows = failed.map((f, i) => `
+            <tr>
+              <td class="text-center text-muted small">${i + 1}</td>
+              <td class="fw-medium text-danger">${f.name}</td>
+              <td>
+                <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
+                  ${f.reason}
+                </span>
+              </td>
+            </tr>`).join('');
+
+          html += `
+            <div class="card border-danger shadow-sm mt-2">
+              <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
+                    <span><i class="bi bi-x-circle-fill me-2"></i>Failed Items — ${failed.length} error(s)</span>
+                <span class="badge bg-white text-danger small">Review &amp; fix in Tally or Zoho</span>
+              </div>
+              <div class="card-body p-0">
+                <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
+                  <table class="table table-sm table-hover mb-0 align-middle">
+                    <thead class="table-light sticky-top">
+                      <tr>
+                        <th style="width:40px;">#</th>
+                        <th>Item Name</th>
+                        <th>Error Reason</th>
+                      </tr>
+                    </thead>
+                    <tbody>${rows}</tbody>
+                  </table>
+                </div>
+              </div>
+              <div class="card-footer bg-light text-muted small">
+                <i class="bi bi-lightbulb me-1"></i>Common fix: Check if this item already exists in Zoho with a different name, or if the HSN/rate is invalid.
+              </div>
+            </div>`;
+        }
+
+        resultDiv.innerHTML = html;
+      }
+
+      async function syncZoho() {
+        if (!confirm("This will sync ALL fetched items to Zoho Books. Continue?")) return;
+
+        const btn = document.querySelector("button[onclick='syncZoho()']") || document.querySelector(".btn-outline-primary");
+        const originalText = btn ? btn.innerHTML : '';
+        if (btn) {
+          btn.disabled = true;
+          btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
+        }
+
+        _setItemsSyncButtons(true);
+        _showItemsSyncConsole(true);
+        clearItemsSyncConsole();
+        _setItemsSyncConsoleStatus('Starting...');
 
         // Show spinner in result area
         let resultDiv = document.getElementById('itemsSyncResult');
@@ -341,83 +491,277 @@
           </div>`;
 
         try {
-          const res = await fetch("/api/items/sync_zoho", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
+          if (_itemsSyncES) {
+            try { _itemsSyncES.close(); } catch (e) {}
+            _itemsSyncES = null;
+          }
+
+          const res = await fetch('/api/items/sync_zoho/start', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ items: null }),
           });
-          const data = await res.json();
+          const startData = await res.json().catch(() => ({}));
+          if (!res.ok || startData.status !== 'success' || !startData.job_id) {
+            throw new Error(startData.message || 'Failed to start sync job');
+          }
 
-          if (data.status === "success") {
-            const s = data.stats;
-            const failed = data.failed_items || [];
+          _itemsSyncJobId = startData.job_id;
+          _appendItemsSyncLine('Job ID: ' + _itemsSyncJobId);
+          _setItemsSyncConsoleStatus('Running...');
 
-            // ── Summary bar ──────────────────────────────────────────────
-            const alertClass = s.failed > 0 ? 'alert-warning' : 'alert-success';
-            let html = `
-              <div class="alert ${alertClass} border-0 shadow-sm mt-2">
-                <div class="fw-bold mb-2">${s.failed > 0 ? '⚠️' : '✅'} Items Sync Complete</div>
-                <div class="d-flex gap-4 flex-wrap">
-                  <span><strong class="text-success">${s.created}</strong> Created</span>
-                  <span><strong class="text-primary">${s.updated}</strong> Updated</span>
-                  <span><strong class="text-secondary">${s.skipped || 0}</strong> Skipped</span>
-                  <span><strong class="text-danger">${s.failed}</strong> Failed</span>
-                </div>
-              </div>`;
+          _itemsSyncES = new EventSource(`/api/jobs/${_itemsSyncJobId}/stream`);
+          _itemsSyncES.addEventListener('log', (ev) => {
+            try {
+              const d = JSON.parse(ev.data || '{}');
+              if (d.message) _appendItemsSyncLine(d.message);
+            } catch (e) {}
+          });
+          _itemsSyncES.addEventListener('done', (ev) => {
+            let data = {};
+            try { data = JSON.parse(ev.data || '{}'); } catch (e) {}
+            const result = data.result || {};
 
-            // ── Failed items panel (always visible) ──────────────────────
-            if (failed.length > 0) {
-              const rows = failed.map((f, i) => `
-                <tr>
-                  <td class="text-center text-muted small">${i + 1}</td>
-                  <td class="fw-medium text-danger">${f.name}</td>
-                  <td>
-                    <span class="badge bg-danger-subtle text-danger border border-danger-subtle">
-                      ${f.reason}
-                    </span>
-                  </td>
-                </tr>`).join('');
+            if (_itemsSyncES) {
+              try { _itemsSyncES.close(); } catch (e) {}
+              _itemsSyncES = null;
+            }
 
-              html += `
-                <div class="card border-danger shadow-sm mt-2">
-                  <div class="card-header bg-danger text-white fw-bold d-flex justify-content-between align-items-center">
-                    <span>❌ Failed Items — ${failed.length} error(s)</span>
-                    <span class="badge bg-white text-danger small">Review &amp; fix in Tally or Zoho</span>
-                  </div>
-                  <div class="card-body p-0">
-                    <div class="table-responsive" style="max-height: 350px; overflow-y: auto;">
-                      <table class="table table-sm table-hover mb-0 align-middle">
-                        <thead class="table-light sticky-top">
-                          <tr>
-                            <th style="width:40px;">#</th>
-                            <th>Item Name</th>
-                            <th>Error Reason</th>
-                          </tr>
-                        </thead>
-                        <tbody>${rows}</tbody>
-                      </table>
-                    </div>
-                  </div>
-                  <div class="card-footer bg-light text-muted small">
-                    💡 Common fix: Check if this item already exists in Zoho with a different name, or if the HSN/rate is invalid.
-                  </div>
+            _setItemsSyncButtons(false);
+            _setItemsSyncConsoleStatus(result.status || 'done');
+
+            if (result.status === 'success' || result.status === 'stopped') {
+              _renderItemsSyncResult(resultDiv, result);
+            } else {
+              resultDiv.innerHTML = `
+                <div class="alert alert-danger mt-2">
+                  <strong><i class="bi bi-x-circle-fill me-1"></i>Sync Failed:</strong> ${result.message || 'Unknown error'}
                 </div>`;
             }
 
-            resultDiv.innerHTML = html;
+            if (btn) {
+              btn.disabled = false;
+              btn.innerHTML = originalText;
+            }
+          });
 
-          } else {
-            resultDiv.innerHTML = `
-              <div class="alert alert-danger mt-2">
-                <strong>❌ Sync Failed:</strong> ${data.message || 'Unknown error'}
-              </div>`;
-          }
         } catch (err) {
           console.error(err);
-          resultDiv.innerHTML = `<div class="alert alert-danger mt-2">❌ Connection Error: ${err.message}</div>`;
+          resultDiv.innerHTML = `<div class="alert alert-danger mt-2"><i class="bi bi-wifi-off me-1"></i>Connection Error: ${err.message}</div>`;
+          _setItemsSyncButtons(false);
+          if (btn) {
+            btn.disabled = false;
+            btn.innerHTML = originalText;
+          }
+        }
+      }
+
+      function _setInvAdjButtons(previewLoading=false, applyLoading=false) {
+        const previewBtn = document.getElementById('invAdjPreviewBtn');
+        const applyBtn = document.getElementById('invAdjApplyBtn');
+        if (previewBtn) previewBtn.disabled = previewLoading;
+        if (applyBtn) applyBtn.disabled = applyLoading || !invAdjPreviewReady;
+      }
+
+      async function previewInventoryAdjustment() {
+        const excelInp = document.getElementById('invAdjExcel');
+        const xmlInp = document.getElementById('invAdjXml');
+        const out = document.getElementById('invAdjResult');
+
+        const excelFile = excelInp && excelInp.files ? excelInp.files[0] : null;
+        const xmlFile = xmlInp && xmlInp.files ? xmlInp.files[0] : null;
+          if (!excelFile || !xmlFile) { alert('Choose both Excel (.xlsx) and XML (.xml).'); return; }
+
+        _setInvAdjButtons(true, false);
+        if (out) out.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Previewing...</div>';
+
+        try {
+          const fd = new FormData();
+          fd.append('excel_file', excelFile);
+          fd.append('xml_file', xmlFile);
+          const res = await fetch('/api/items/inventory_adjustment/preview', { method: 'POST', body: fd });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.status !== 'success') throw new Error(data.message || 'Preview failed');
+
+          invAdjPreviewReady = true;
+          _setInvAdjButtons(false, false);
+
+          const s = data.stats || {};
+          const neg = data.negative_preview || [];
+          const negCount = data.negative_count || 0;
+          const applyCount = data.to_apply_count || 0;
+
+          let html = `
+            <div class="alert alert-info py-2 mb-3">
+              <div class="small">
+                <b>XML items:</b> ${s.xml_items ?? '-'} |
+                <b>Excel items:</b> ${s.excel_items ?? '-'} |
+                <b>To apply:</b> ${applyCount} |
+                <b>Negative:</b> ${negCount}
+              </div>
+            </div>
+          `;
+
+          html += `<div class="d-flex justify-content-end mb-2 gap-2">
+            <a class="btn btn-sm btn-outline-secondary" href="/api/items/inventory_adjustment/matched_report.xlsx" target="_blank">
+              <i class="bi bi-download me-1"></i> Matched Report
+            </a>
+          </div>`;
+
+          if (negCount > 0) {
+            html += `<div class="d-flex justify-content-between align-items-center mb-2">
+              <div class="fw-semibold text-danger">Negative Items (first ${neg.length}) — will be skipped and handled manually</div>
+              <a class="btn btn-sm btn-outline-danger" href="/api/items/inventory_adjustment/negative_report.xlsx" target="_blank">
+                <i class="bi bi-download me-1"></i> Download Report
+              </a>
+            </div>`;
+            html += `<div class="table-responsive"><table class="table table-sm table-striped align-middle">
+              <thead><tr><th>Item</th><th>Reason</th><th class="text-end">Excel Qty</th><th class="text-end">XML Main Qty</th><th class="text-end">XML Other Qty</th><th class="text-end">Needed Main Qty</th></tr></thead><tbody>`;
+            for (const r of neg) {
+              html += `<tr>
+                <td>${(r.name || '')}</td>
+                <td>${(r.reason || '')}</td>
+                <td class="text-end">${(r.excel_qty ?? '')}</td>
+                <td class="text-end">${(r.xml_main_qty ?? '')}</td>
+                <td class="text-end">${(r.xml_other_qty ?? '')}</td>
+                <td class="text-end text-danger">${(r.needed_main_qty ?? '')}</td>
+              </tr>`;
+            }
+            html += `</tbody></table></div>`;
+          } else {
+            html += `<div class="text-success small">No negative items found.</div>`;
+          }
+
+          if (out) out.innerHTML = html;
+        } catch (e) {
+          invAdjPreviewReady = false;
+          _setInvAdjButtons(false, false);
+          if (out) out.innerHTML = `<div class="alert alert-danger py-2 mb-0">Preview failed: ${e.message}</div>`;
+        }
+      }
+
+      async function applyInventoryAdjustment() {
+        if (!invAdjPreviewReady) { alert('Run Preview first'); return; }
+        if (!confirm('Apply Opening Stock to Zoho? This will update item locations opening stock. Continue?')) return;
+
+        const out = document.getElementById('invAdjResult');
+        _setInvAdjButtons(true, true);
+        if (out) out.innerHTML = '<div class="text-muted"><span class="spinner-border spinner-border-sm me-2"></span>Applying to Zoho... (this may take time)</div>';
+
+        try {
+          const fd = new FormData();
+          fd.append('dry_run', '0');
+          // Apply ALL items by default (no limit). Backend supports resume.
+          fd.append('resume', '1');
+          const res = await fetch('/api/items/inventory_adjustment/apply', { method: 'POST', body: fd });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.status !== 'success') throw new Error(data.message || 'Apply failed');
+
+          const applied = data.results || {};
+          const updated = applied.updated ?? 0;
+          const failed = applied.failed ?? 0;
+          const missing = applied.missing_item_id ?? 0;
+          const updatedItems = applied.updated_items || [];
+          const runReportUrl = data.run_report_url || '';
+
+          let html = `<div class="alert alert-success py-2 mb-3">
+            <div class="small"><b>Updated:</b> ${updated} | <b>Failed:</b> ${failed} | <b>Missing item_id:</b> ${missing}</div>
+          </div>`;
+
+          if (runReportUrl) {
+            html += `<div class="mb-2">
+              <a class="btn btn-sm btn-outline-success" href="${runReportUrl}" target="_blank">
+                <i class="bi bi-download me-1"></i> Download Run Report
+              </a>
+            </div>`;
+          }
+
+          if (updatedItems.length) {
+            html += `<div class="fw-semibold mb-2">Updated Items (first 20)</div>`;
+            html += `<div class="table-responsive"><table class="table table-sm table-striped"><thead><tr><th>Item</th><th>Zoho Item ID</th><th>Debug</th></tr></thead><tbody>`;
+            updatedItems.slice(0, 20).forEach(it => {
+              const id = it.item_id || '';
+              const name = it.name || '';
+              html += `<tr>
+                <td>${name}</td>
+                <td><code>${id}</code></td>
+                <td><a href="/api/zoho/items/${id}/debug" target="_blank">view</a></td>
+              </tr>`;
+            });
+            html += `</tbody></table></div>`;
+          }
+          if ((applied.errors || []).length) {
+            html += `<div class="fw-semibold mb-2">Errors (first 50)</div>`;
+            html += `<div class="table-responsive"><table class="table table-sm table-striped"><thead><tr><th>Item</th><th>Reason</th></tr></thead><tbody>`;
+            (applied.errors || []).slice(0, 50).forEach(er => {
+              html += `<tr><td>${er.name || ''}</td><td>${er.reason || ''}</td></tr>`;
+            });
+            html += `</tbody></table></div>`;
+          }
+
+          if (out) out.innerHTML = html;
+        } catch (e) {
+          if (out) out.innerHTML = `<div class="alert alert-danger py-2 mb-0">Apply failed: ${e.message}</div>`;
         } finally {
-          btn.disabled = false;
-          btn.innerHTML = originalText;
+          _setInvAdjButtons(false, false);
+        }
+      }
+
+      async function refreshZohoItemMap() {
+        const btn = document.getElementById('invAdjRefreshMapBtn');
+        const out = document.getElementById('invAdjRefreshMapResult');
+        const original = btn ? btn.innerHTML : '';
+        try {
+          if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Fetching...'; }
+          if (out) out.textContent = '';
+
+          const res = await fetch('/api/items/sync_map/refresh_from_zoho', { method: 'POST' });
+          const data = await res.json().catch(() => ({}));
+          if (!res.ok || data.status !== 'success') throw new Error(data.message || 'Failed');
+
+          if (out) out.textContent = `Loaded ${data.loaded || 0} items from Zoho.`;
+        } catch (e) {
+          if (out) out.textContent = `Failed: ${e.message}`;
+          alert('Failed: ' + e.message);
+        } finally {
+          if (btn) { btn.disabled = false; btn.innerHTML = original; }
+        }
+      }
+
+      async function downloadTransferExcel() {
+        const inp = document.getElementById('transferXmlFile');
+        const out = document.getElementById('transferXmlResult');
+        const btn = document.getElementById('transferXmlBtn');
+        const file = inp && inp.files ? inp.files[0] : null;
+        if (!file) { alert('Choose XML file'); return; }
+
+        const original = btn ? btn.innerHTML : '';
+        if (btn) { btn.disabled = true; btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Generating...'; }
+        if (out) out.textContent = '';
+
+        try {
+          const fd = new FormData();
+          fd.append('xml_file', file);
+          const res = await fetch('/api/items/godown_xml/to_transfer_excel.xlsx', { method: 'POST', body: fd });
+          if (!res.ok) {
+            const data = await res.json().catch(() => ({}));
+            throw new Error(data.message || ('Failed (HTTP ' + res.status + ')'));
+          }
+          const blob = await res.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = 'stocks_transferred_to_main_warehouse.xlsx';
+          document.body.appendChild(a);
+          a.click();
+          a.remove();
+          window.URL.revokeObjectURL(url);
+          if (out) out.textContent = 'Downloaded.';
+        } catch (e) {
+          if (out) out.textContent = 'Failed: ' + e.message;
+          alert('Failed: ' + e.message);
+        } finally {
+          if (btn) { btn.disabled = false; btn.innerHTML = original; }
         }
       }
 
@@ -428,7 +772,7 @@
         document.getElementById("total-categories").innerText =
           stats.categories || 0;
         document.getElementById("total-value").innerText =
-          "₹" + (stats.total_value || 0).toLocaleString();
+            "₹" + (stats.total_value || 0).toLocaleString();
       }
 
       function renderTable(items) {
@@ -446,11 +790,11 @@
                     <td class="fw-medium text-primary">${i.name}</td>
                     <td><span class="badge bg-light text-dark border">${i.group_name || i.group || "-"}</span></td>
                     <td><small class="text-muted">${i.category || "-"}</small></td>
-                    <td>${i.hsn || "-"}</td>
-                    <td>${i.gst_rate ? i.gst_rate + "%" : "-"}</td>
-                    <td>${i.rate_of_duty ? i.rate_of_duty + "%" : "-"}</td>
+                    <td class="hsn-col">${i.hsn || "-"}</td>
+                    <td class="tax-col">${i.gst_rate ? i.gst_rate + "%" : "-"}</td>
+                    <td class="tax-col">${i.rate_of_duty ? i.rate_of_duty + "%" : "-"}</td>
                     <td>${i.qty ? i.qty + " " + (i.qty_unit || "") : "-"}</td>
-                    <td class="text-end fw-bold">${i.value ? "₹" + parseFloat(i.value).toLocaleString() : "-"}</td>
+                <td class="text-end fw-bold">${i.value ? "₹" + parseFloat(i.value).toLocaleString() : "-"}</td>
                 </tr>
             `,
           )
@@ -478,7 +822,7 @@
                         <div class="col-12 mt-2">
                             <div class="alert alert-primary d-flex justify-content-between mb-0">
                                 <span>Total Value</span>
-                                <span class="fw-bold fs-5">₹${item.value ? parseFloat(item.value).toLocaleString() : "0"}</span>
+            <span class="fw-bold fs-5">₹${item.value ? parseFloat(item.value).toLocaleString() : "0"}</span>
                             </div>
                         </div>
                     </div>

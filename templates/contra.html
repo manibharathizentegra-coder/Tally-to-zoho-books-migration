@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
@@ -6,20 +6,28 @@
     <title>Contra Vouchers - Tally to Zoho Migration</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
-    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@300;400;500;700&display=swap" rel="stylesheet">
-    <style>
-        body { font-family: 'Roboto', sans-serif; background: #f0f2f5; }
-        .navbar { background: #fff; box-shadow: 0 2px 4px rgba(0,0,0,0.1); }
-        .nav-link.active { color: #d32f2f !important; font-weight: 500; border-bottom: 2px solid #d32f2f; }
-        .kpi-card { background: #fff; border-radius: 12px; padding: 20px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); border-left: 4px solid #6c757d; transition: transform 0.2s; }
-        .kpi-card:hover { transform: translateY(-3px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); }
-        .kpi-value { font-size: 28px; font-weight: 700; color: #333; }
-        .kpi-label { font-size: 13px; color: #666; text-transform: uppercase; letter-spacing: 0.5px; }
-        .content-card { background: #fff; border-radius: 12px; box-shadow: 0 2px 4px rgba(0,0,0,0.05); overflow: hidden; }
-        .table thead th { font-weight: 600; color: #555; background: #f8f9fa; border-bottom: 2px solid #eee; }
-    </style>
+        {% include '_sidebar_styles.html' %}
+    {% include '_zb_theme.html' %}
 </head>
 <body>
+    {% set active_page = 'contra' %}
+    <div class="app-shell">
+        {% include '_sidebar.html' %}
+        <main class="main">
+            {% set page_title = 'Contra' %}
+            {% set page_subtitle = 'Import contra vouchers and sync to Zoho.' %}
+            {% include '_topbar.html' %}
+
+            {% set steps_title = 'Contra: Recommended Steps' %}
+            {% set steps = [
+              'Confirm Ledgers (Bank/Cash) are synced to Zoho.',
+              'Import contra XML into the active DB.',
+              'Review from/to account mapping.',
+              'Sync to Zoho and fix any failed vouchers.'
+            ] %}
+            {% include '_steps_card.html' %}
+
+
 
     <!-- NAVBAR -->
     <nav class="navbar navbar-expand-lg navbar-light sticky-top px-4">
@@ -53,11 +61,17 @@
                 <li class="nav-item me-3">
                     <a class="nav-link active" href="/contra"><i class="bi bi-arrow-left-right me-1"></i> Contra</a>
                 </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/credit_note"><i class="bi bi-file-earmark-minus me-1"></i> Credit Note</a>
+                </li>
+                <li class="nav-item me-3">
+                    <a class="nav-link" href="/debit_note"><i class="bi bi-file-earmark-plus me-1"></i> Debit Note</a>
+                </li>
             </ul>
         </div>
     </nav>
 
-    <div class="container-fluid py-4 px-4">
+    <div class="container-fluid p-0">
 
         <!-- HEADER & ACTIONS -->
         <div class="d-flex justify-content-between align-items-center mb-4">
@@ -83,10 +97,28 @@
         <div class="content-card mb-4 p-3 border-top border-secondary border-3">
             <div class="row g-3 align-items-end">
                 <div class="col-md-3">
+                    <label class="form-label small fw-bold">Select Month</label>
+                    <select id="monthFilter" class="form-select" onchange="updateDatesByMonth()">
+                        <option value="">-- Custom Range --</option>
+                        <option value="04">April</option>
+                        <option value="05">May</option>
+                        <option value="06">June</option>
+                        <option value="07">July</option>
+                        <option value="08">August</option>
+                        <option value="09">September</option>
+                        <option value="10">October</option>
+                        <option value="11">November</option>
+                        <option value="12">December</option>
+                        <option value="01">January</option>
+                        <option value="02">February</option>
+                        <option value="03">March</option>
+                    </select>
+                </div>
+                <div class="col-md-2">
                     <label class="form-label small fw-bold">From Date</label>
                     <input type="date" id="fromDate" class="form-control" value="2025-04-01">
                 </div>
-                <div class="col-md-3">
+                <div class="col-md-2">
                     <label class="form-label small fw-bold">To Date</label>
                     <input type="date" id="toDate" class="form-control" value="2025-04-30">
                 </div>
@@ -94,7 +126,7 @@
                     <label class="form-label small fw-bold">Limit (optional)</label>
                     <input type="number" id="limitInput" class="form-control" placeholder="All">
                 </div>
-                <div class="col-md-4">
+                <div class="col-md-3">
                     <button onclick="fetchData()" class="btn btn-secondary w-100">
                         <i class="bi bi-funnel me-2"></i> Apply Filter
                     </button>
@@ -166,7 +198,27 @@
         let allContras = [];
         let totalAmount = 0;
 
-        document.addEventListener('DOMContentLoaded', () => {
+        document.addEventListener('DOMContentLoaded', async () => {
+            // Set initial month
+            document.getElementById('monthFilter').value = '04';
+            updateDatesByMonth();
+
+            try {
+                const res = await fetch('/api/db/contra');
+                if (res.ok) {
+                    const data = await res.json();
+                    if (data.contra_vouchers && data.contra_vouchers.length > 0) {
+                        allContras = data.contra_vouchers;
+                        totalAmount = data.total_amount;
+                        updateKPIs();
+                        renderContras(allContras);
+                        return;
+                    }
+                }
+            } catch (err) {
+                console.log('Could not load from DB, trying localStorage...');
+            }
+
             const dataStr = localStorage.getItem('contraData');
             if (dataStr) {
                 try {
@@ -178,6 +230,18 @@
                 } catch(e) {}
             }
         });
+
+        function updateDatesByMonth() {
+            const m = document.getElementById('monthFilter').value;
+            if (!m) return;
+            // Assuming FY 2025-26
+            const year = (parseInt(m) >= 1 && parseInt(m) <= 3) ? '2026' : '2025';
+            const first = `${year}-${m}-01`;
+            const lastDay = new Date(year, parseInt(m), 0).getDate();
+            const last = `${year}-${m}-${lastDay}`;
+            document.getElementById('fromDate').value = first;
+            document.getElementById('toDate').value = last;
+        }
 
         function formatDateForAPI(dateInput) {
             return dateInput.replace(/-/g, '');
@@ -286,26 +350,33 @@
             btn.disabled = true;
             btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Syncing...';
 
+            const fromDate = formatDateForAPI(document.getElementById('fromDate').value);
+            const toDate = formatDateForAPI(document.getElementById('toDate').value);
+
             try {
                 const res = await fetch('/api/contra/sync_zoho', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
-                    body: JSON.stringify({ contras: null })
+                    body: JSON.stringify({ 
+                        contras: null,
+                        from_date: fromDate,
+                        to_date: toDate
+                    })
                 });
                 const data = await res.json();
 
                 if (data.status === 'success') {
-                    let msg = '✅ Zoho Sync Complete!\\n\\n';
+                    let msg = 'Zoho Sync Complete!\\n\\n';
                     msg += `Total: ${data.total} | Success: ${data.success} | Failed: ${data.failed}\\n\\n`;
                     if (data.failed > 0 && data.errors) {
-                        msg += '⚠️ Failed:\\n';
+                        msg += 'Failed:\\n';
                         data.errors.forEach((e, i) => {
                             msg += `${i+1}. #${e.contra_number} - ${e.error}\\n`;
                         });
                     }
                     alert(msg);
                 } else {
-                    alert('❌ Sync Error: ' + data.message);
+                    alert('Sync Error: ' + data.message);
                 }
             } catch (err) {
                 alert('Connection Error during Sync');
@@ -398,5 +469,9 @@
             modal.show();
         }
     </script>
+
+    </div>
+        </main>
+    </div>
 </body>
 </html>

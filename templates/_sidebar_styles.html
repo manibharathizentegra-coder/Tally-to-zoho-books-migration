@@ -1,0 +1,116 @@
+﻿<style>
+  body {
+    margin: 0;
+    background: #f4f5f7;
+  }
+
+  /* Hide legacy navbar (sidebar replaces it) */
+  .navbar { display: none !important; }
+
+  .app-shell {
+    display: flex;
+    min-height: 100vh;
+  }
+  .sidebar {
+    width: 260px;
+    background: #111827;
+    color: #fff;
+    position: sticky;
+    top: 0;
+    height: 100vh;
+    overflow-y: auto;
+    /* Match main top padding to avoid a "gap" misalignment */
+    padding: 8px 14px;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.08);
+    /* margin-bottom: 20px; */
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px 12px 10px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    margin-bottom: 10px;
+  }
+  .brand .title {
+    font-weight: 700;
+    letter-spacing: 0.2px;
+  }
+  .sidebar .nav-section {
+    margin-top: 10px;
+    margin-bottom: 8px;
+    padding: 0 10px;
+    font-size: 11px;
+    letter-spacing: 0.8px;
+    color: rgba(255, 255, 255, 0.55);
+    text-transform: uppercase;
+  }
+  .sidebar a.nav-item-link {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 10px;
+    border-radius: 10px;
+    color: rgba(255, 255, 255, 0.88);
+    text-decoration: none;
+  }
+  .sidebar a.nav-item-link:hover {
+    background: rgba(255, 255, 255, 0.08);
+  }
+  .sidebar a.nav-item-link.active {
+    background: rgba(37, 99, 235, 0.20);
+    color: #fff;
+  }
+  .main {
+    flex: 1;
+    padding: 8px 18px 28px 18px;
+  }
+
+  /* Keep pages readable on wide screens */
+  .main .container,
+  .main .container-fluid {
+    max-width: 1400px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  .main .container,
+  .main .container-fluid {
+    padding-left: 0;
+    padding-right: 0;
+  }
+  .topbar {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+    padding: 14px 16px;
+    margin-bottom: 10px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    flex-wrap: wrap;
+  }
+  .topbar .subtitle {
+    color: #6b7280;
+    font-size: 13px;
+  }
+
+  /* Small helpers for consistent alignment */
+  .btn-nowrap { white-space: nowrap; }
+  .btn-inline {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+  }
+  .btn-inline { flex-shrink: 0; }
+
+  @media (max-width: 992px) {
+    .sidebar {
+      display: none;
+    }
+    .main {
+      padding: 8px;
+    }
+  }
+</style>

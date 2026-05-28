@@ -16,7 +16,7 @@ sys.path.append(str(parent_dir))
 try:
     import database_manager
 except ImportError:
-    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    print("️ Warning: Could not import database_manager. SQLite sync will be skipped.")
     database_manager = None
 
 # Load credentials
@@ -119,7 +119,7 @@ def get_ledger_map_from_cache():
         
         if rows:
             ledger_map = {name: ledger_type for name, ledger_type in rows}
-            print(f"   ✅ Loaded {len(ledger_map)} ledgers from cache")
+            print(f"    Loaded {len(ledger_map)} ledgers from cache")
             return ledger_map
         return None
     except:
@@ -151,9 +151,9 @@ def save_ledger_map_to_cache(ledger_map, groups_dict):
         
         conn.commit()
         conn.close()
-        print(f"   💾 Cached {len(ledger_map)} ledgers and {len(groups_dict)} groups to database")
+        print(f"    Cached {len(ledger_map)} ledgers and {len(groups_dict)} groups to database")
     except Exception as e:
-        print(f"   ⚠️  Failed to cache data: {e}")
+        print(f"   ️  Failed to cache data: {e}")
 
 # ----------------------------------------------------------
 # ZOHO BOOKS CACHING
@@ -189,9 +189,9 @@ def save_zoho_contacts_to_cache(contact_map):
         
         conn.commit()
         conn.close()
-        print(f"   💾 Cached {len(contact_map)} Zoho contacts to database (org: {ORGANIZATION_ID})")
+        print(f"    Cached {len(contact_map)} Zoho contacts to database (org: {ORGANIZATION_ID})")
     except Exception as e:
-        print(f"   ⚠️  Failed to cache Zoho contacts: {e}")
+        print(f"   ️  Failed to cache Zoho contacts: {e}")
 
 def get_zoho_contacts_from_cache():
     """Get Zoho contacts from SQLite cache — returns None if org has changed"""
@@ -206,7 +206,7 @@ def get_zoho_contacts_from_cache():
         
         if cached_org_id != ORGANIZATION_ID:
             conn.close()
-            print(f"   🔄 Organization changed ({cached_org_id} → {ORGANIZATION_ID}) — clearing contacts cache")
+            print(f"    Organization changed ({cached_org_id} → {ORGANIZATION_ID}) — clearing contacts cache")
             return None  # Force fresh fetch
         
         cursor.execute("SELECT contact_id, contact_name, contact_name_lower, contact_type FROM zoho_contacts")
@@ -221,7 +221,7 @@ def get_zoho_contacts_from_cache():
                     "original_name": contact_name,
                     "contact_type": contact_type
                 }
-            print(f"   ✅ Loaded {len(contact_map)} Zoho contacts from cache (org: {ORGANIZATION_ID})")
+            print(f"    Loaded {len(contact_map)} Zoho contacts from cache (org: {ORGANIZATION_ID})")
             return contact_map
         return None
     except:
@@ -252,9 +252,9 @@ def save_zoho_accounts_to_cache(account_map):
         
         conn.commit()
         conn.close()
-        print(f"   💾 Cached {len(account_map)} Zoho accounts to database")
+        print(f"    Cached {len(account_map)} Zoho accounts to database")
     except Exception as e:
-        print(f"   ⚠️  Failed to cache Zoho accounts: {e}")
+        print(f"   ️  Failed to cache Zoho accounts: {e}")
 
 def get_zoho_accounts_from_cache():
     """Get Zoho accounts from SQLite cache"""
@@ -268,7 +268,7 @@ def get_zoho_accounts_from_cache():
         
         if rows:
             account_map = {account_name_lower: account_id for account_id, account_name_lower in rows}
-            print(f"   ✅ Loaded {len(account_map)} Zoho accounts from cache")
+            print(f"    Loaded {len(account_map)} Zoho accounts from cache")
             return account_map
         return None
     except:
@@ -293,7 +293,7 @@ def get_ledger_map_from_tally(use_cache=True, force_refresh=False):
         if cached_map:
             return cached_map
     
-    print("\n🔍 Building DYNAMIC ledger map from Tally...")
+    print("\n Building DYNAMIC ledger map from Tally...")
     
     # Step 1: Fetch all Groups to build the hierarchy
     group_xml = """<ENVELOPE><HEADER><TALLYREQUEST>Export Data</TALLYREQUEST></HEADER>
@@ -310,9 +310,9 @@ def get_ledger_map_from_tally(use_cache=True, force_refresh=False):
             parent = g.find('PARENT').text.strip() if g.find('PARENT') else ""
             if name:
                 children_map[parent].append(name)
-        print(f"   ✅ Found {len(children_map)} group relationships")
+        print(f"    Found {len(children_map)} group relationships")
     except Exception as e:
-        print(f"   ⚠️  Could not fetch Tally groups: {e}")
+        print(f"   ️  Could not fetch Tally groups: {e}")
         return {}
 
     # Step 2: Recursive function to find ALL descendants of a group
@@ -331,8 +331,8 @@ def get_ledger_map_from_tally(use_cache=True, force_refresh=False):
     vendor_groups = get_all_descendants("Sundry Creditors")
     customer_groups = get_all_descendants("Sundry Debtors")
     
-    print(f"   📊 Vendor groups (under Sundry Creditors): {len(vendor_groups)}")
-    print(f"   📊 Customer groups (under Sundry Debtors): {len(customer_groups)}")
+    print(f"    Vendor groups (under Sundry Creditors): {len(vendor_groups)}")
+    print(f"    Customer groups (under Sundry Debtors): {len(customer_groups)}")
     
     # Show some examples
     if vendor_groups:
@@ -351,13 +351,13 @@ def get_ledger_map_from_tally(use_cache=True, force_refresh=False):
     
     ledger_map = {}
     try:
-        print(f"   🔄 Fetching ledgers from Tally (this may take a minute)...")
+        print(f"    Fetching ledgers from Tally (this may take a minute)...")
         res = requests.post(TALLY_URL, data=ledger_xml, timeout=60)  # Increased timeout to 60s
         soup = BeautifulSoup(res.content, 'lxml-xml')
         
         # Debug: Check what we got
         all_ledgers = soup.find_all('LEDGER')
-        print(f"   🔍 Raw ledger count from Tally: {len(all_ledgers)}")
+        print(f"    Raw ledger count from Tally: {len(all_ledgers)}")
         
         vendor_count = 0
         customer_count = 0
@@ -385,7 +385,7 @@ def get_ledger_map_from_tally(use_cache=True, force_refresh=False):
                 ledger_map[name] = "account"
                 account_count += 1
         
-        print(f"   ✅ Classified {len(ledger_map)} ledgers:")
+        print(f"    Classified {len(ledger_map)} ledgers:")
         print(f"      - Vendors: {vendor_count}")
         print(f"      - Customers: {customer_count}")
         print(f"      - Accounts: {account_count}")
@@ -402,10 +402,10 @@ def get_ledger_map_from_tally(use_cache=True, force_refresh=False):
                 print(f"      Customer ledger examples: {', '.join(customer_examples)}")
         
     except requests.exceptions.Timeout:
-        print(f"   ⚠️  Tally ledger fetch timed out after 60s")
-        print(f"   💡 Your Tally database may have many ledgers. Continuing with empty map...")
+        print(f"   ️  Tally ledger fetch timed out after 60s")
+        print(f"    Your Tally database may have many ledgers. Continuing with empty map...")
     except Exception as e:
-        print(f"   ⚠️  Could not fetch Tally ledgers: {e}")
+        print(f"   ️  Could not fetch Tally ledgers: {e}")
         import traceback
         traceback.print_exc()
     
@@ -447,7 +447,7 @@ def fetch_tally_journals(from_date="20250401", to_date="20250430", limit=None):
             if normalized_search == normalized_map:
                 # Found a match!
                 if ledger_type != "account":
-                    print(f"      🔍 Fuzzy matched '{ledger_name}' -> '{map_name}' ({ledger_type})")
+                    print(f"       Fuzzy matched '{ledger_name}' -> '{map_name}' ({ledger_type})")
                 return ledger_type
         
         # Default to account
@@ -531,7 +531,7 @@ def fetch_tally_journals(from_date="20250401", to_date="20250430", limit=None):
         return journal_data
     
     except Exception as e:
-        print(f"❌ Error fetching Tally journals: {e}")
+        print(f" Error fetching Tally journals: {e}")
         return []
 
 def find_tag_ids_by_name(token, target_tag_name, target_option_name):
@@ -575,7 +575,7 @@ def get_zoho_accounts(token, use_cache=True, force_refresh=False):
         if cached_accounts:
             return cached_accounts
     
-    print("   🔄 Fetching accounts from Zoho Books...")
+    print("    Fetching accounts from Zoho Books...")
     headers = {"Authorization": f"Zoho-oauthtoken {token}"}
     params = {"organization_id": ORGANIZATION_ID}
     
@@ -586,7 +586,7 @@ def get_zoho_accounts(token, use_cache=True, force_refresh=False):
     for acc in accounts:
         account_map[acc["account_name"].lower().strip()] = acc["account_id"]
     
-    print(f"   ✅ Fetched {len(account_map)} accounts")
+    print(f"    Fetched {len(account_map)} accounts")
     
     # Save to cache
     save_zoho_accounts_to_cache(account_map)
@@ -608,7 +608,7 @@ def get_zoho_contacts(token, use_cache=True, force_refresh=False):
         if cached_contacts:
             return cached_contacts
     
-    print("   🔄 Fetching contacts from Zoho Books...")
+    print("    Fetching contacts from Zoho Books...")
     headers = {"Authorization": f"Zoho-oauthtoken {token}"}
     params = {"organization_id": ORGANIZATION_ID, "per_page": 200}
     
@@ -640,7 +640,7 @@ def get_zoho_contacts(token, use_cache=True, force_refresh=False):
         
         page += 1
     
-    print(f"   ✅ Fetched {total_contacts} contacts across {page} page(s)")
+    print(f"    Fetched {total_contacts} contacts across {page} page(s)")
     
     # Save to cache
     save_zoho_contacts_to_cache(contact_map)
@@ -666,17 +666,17 @@ def create_contact_in_zoho(token, contact_name, contact_type):
         if res.status_code in [200, 201] and res.json().get("code") == 0:
             contact_data = res.json().get("contact", {})
             contact_id = contact_data.get("contact_id")
-            print(f"     ✨ Created new {contact_type}: {contact_name} (ID: {contact_id})")
+            print(f"      Created new {contact_type}: {contact_name} (ID: {contact_id})")
             return {
                 "contact_id": contact_id,
                 "contact_type": contact_type,
                 "original_name": contact_name
             }
         else:
-            print(f"     ⚠️  Failed to create contact: {res.json()}")
+            print(f"     ️  Failed to create contact: {res.json()}")
             return None
     except Exception as e:
-        print(f"     ⚠️  Error creating contact: {e}")
+        print(f"     ️  Error creating contact: {e}")
         return None
 
 def find_or_create_contact(token, contact_map, contact_name, contact_type):
@@ -693,11 +693,11 @@ def find_or_create_contact(token, contact_map, contact_name, contact_type):
         if contact_lower in existing_name or existing_name in contact_lower:
             # Handle both contact structures (original_name or contact_name)
             display_name = contact_info.get('original_name') or contact_info.get('contact_name', existing_name)
-            print(f"     🔍 Fuzzy matched '{contact_name}' to '{display_name}'")
+            print(f"      Fuzzy matched '{contact_name}' to '{display_name}'")
             return contact_info
     
     # Contact doesn't exist - create it!
-    print(f"     🆕 Contact '{contact_name}' not found - creating new {contact_type}...")
+    print(f"      Contact '{contact_name}' not found - creating new {contact_type}...")
     new_contact = create_contact_in_zoho(token, contact_name, contact_type)
     
     if new_contact:
@@ -713,7 +713,7 @@ def create_zoho_journal(token, journal_data, account_map, contact_map):
     params = {"organization_id": ORGANIZATION_ID}
     
     print(f"\n{'='*80}")
-    print(f"📝 Processing Journal #{journal_data['journal_number']} - Date: {journal_data['date']}")
+    print(f" Processing Journal #{journal_data['journal_number']} - Date: {journal_data['date']}")
     print(f"{'='*80}")
     
     # Get AP and AR account IDs
@@ -721,9 +721,9 @@ def create_zoho_journal(token, journal_data, account_map, contact_map):
     ar_account_id = account_map.get("accounts receivable")
     
     if not ap_account_id:
-        print("  ⚠️  Accounts Payable account not found in Zoho Books")
+        print("  ️  Accounts Payable account not found in Zoho Books")
     if not ar_account_id:
-        print("  ⚠️  Accounts Receivable account not found in Zoho Books")
+        print("  ️  Accounts Receivable account not found in Zoho Books")
     
     # Build line items
     zoho_line_items = []
@@ -734,7 +734,7 @@ def create_zoho_journal(token, journal_data, account_map, contact_map):
         amount = item["amount"]
         debit_or_credit = item["debit_or_credit"]
         
-        print(f"  📌 {ledger_name} ({ledger_type}): {debit_or_credit.upper()} ₹{amount:,.2f}")
+        print(f"   {ledger_name} ({ledger_type}): {debit_or_credit.upper()} ₹{amount:,.2f}")
         
         # Determine account ID
         account_id = None
@@ -742,24 +742,24 @@ def create_zoho_journal(token, journal_data, account_map, contact_map):
         if ledger_type == "vendor":
             account_id = ap_account_id
             if not account_id:
-                print(f"     ⚠️  Accounts Payable account not found - SKIPPING")
+                print(f"     ️  Accounts Payable account not found - SKIPPING")
                 return False
-            print(f"     💼 Using Accounts Payable account")
+            print(f"      Using Accounts Payable account")
             
         elif ledger_type == "customer":
             account_id = ar_account_id
             if not account_id:
-                print(f"     ⚠️  Accounts Receivable account not found - SKIPPING")
+                print(f"     ️  Accounts Receivable account not found - SKIPPING")
                 return False
-            print(f"     💼 Using Accounts Receivable account")
+            print(f"      Using Accounts Receivable account")
             
         else:
             # Regular account
             account_id = account_map.get(ledger_name.lower().strip())
             if not account_id:
-                print(f"     ⚠️  Account '{ledger_name}' not found in Zoho Books - SKIPPING")
+                print(f"     ️  Account '{ledger_name}' not found in Zoho Books - SKIPPING")
                 return False
-            print(f"     ✅ Found account: {ledger_name}")
+            print(f"      Found account: {ledger_name}")
         
         # Build line item
         line_item = {
@@ -774,9 +774,9 @@ def create_zoho_journal(token, journal_data, account_map, contact_map):
             if contact_info:
                 line_item["customer_id"] = contact_info["contact_id"]
                 line_item["contact_id"] = contact_info["contact_id"]
-                print(f"     ✅ Mapped to {ledger_type}: {contact_info['original_name']} (ID: {contact_info['contact_id']})")
+                print(f"      Mapped to {ledger_type}: {contact_info['original_name']} (ID: {contact_info['contact_id']})")
             else:
-                print(f"     ❌ Failed to find or create contact '{ledger_name}' - SKIPPING")
+                print(f"      Failed to find or create contact '{ledger_name}' - SKIPPING")
                 return False
         
         # Add reporting tags
@@ -784,7 +784,7 @@ def create_zoho_journal(token, journal_data, account_map, contact_map):
             t_id, o_id = find_tag_ids_by_name(token, item["tag_category"], item["tag_option"])
             if t_id and o_id:
                 line_item["tags"] = [{"tag_id": t_id, "tag_option_id": o_id}]
-                print(f"     🏷️  Tag: {item['tag_category']} > {item['tag_option']}")
+                print(f"     ️  Tag: {item['tag_category']} > {item['tag_option']}")
         
         zoho_line_items.append(line_item)
     
@@ -815,20 +815,20 @@ def create_zoho_journal(token, journal_data, account_map, contact_map):
     print(f"    Journal Date: {zoho_date}")
     print(f"    Line Items: {len(zoho_line_items)}")
     
-    print(f"\n  📤 Creating journal in Zoho Books...")
+    print(f"\n   Creating journal in Zoho Books...")
     res = requests.post(f"{BASE_URL}/journals", headers=headers, params=params, json=payload)
     
     if res.status_code in [200, 201] and res.json().get("code") == 0:
         journal_id = res.json().get("journal", {}).get("journal_id", "N/A")
-        print(f"  ✅ SUCCESS! Journal created with ID: {journal_id}")
+        print(f"   SUCCESS! Journal created with ID: {journal_id}")
         return True
     else:
-        print(f"  ❌ FAILED! Status: {res.status_code}")
+        print(f"   FAILED! Status: {res.status_code}")
         print(f"  Response: {json.dumps(res.json(), indent=2)}")
         return False
 
 def main():
-    print("🚀 FULLY DYNAMIC Journal Migration: Tally → Zoho Books")
+    print(" FULLY DYNAMIC Journal Migration: Tally → Zoho Books")
     print("="*80)
     print("Features:")
     print("   - Automatic vendor/customer detection from Tally groups")
@@ -837,23 +837,23 @@ def main():
     print("="*80)
     
     # Get access token
-    print("\n🔐 Authenticating with Zoho Books...")
+    print("\n Authenticating with Zoho Books...")
     token = get_access_token()
     if not token:
-        print("❌ Failed to get access token")
+        print(" Failed to get access token")
         return
-    print("✅ Authentication successful")
+    print(" Authentication successful")
     
     # Fetch Zoho data
-    print("\n📊 Fetching Zoho Books accounts and contacts...")
+    print("\n Fetching Zoho Books accounts and contacts...")
     account_map = get_zoho_accounts(token)
     contact_map = get_zoho_contacts(token)
-    print(f"✅ Found {len(account_map)} accounts and {len(contact_map)} contacts")
+    print(f" Found {len(account_map)} accounts and {len(contact_map)} contacts")
     
     # Fetch Tally journals (first 5 for testing)
-    print("\n📥 Fetching journals from Tally...")
+    print("\n Fetching journals from Tally...")
     journals = fetch_tally_journals(from_date="20250401", to_date="20250407", limit=5)
-    print(f"✅ Found {len(journals)} journal(s) to migrate")
+    print(f" Found {len(journals)} journal(s) to migrate")
     
     # Process each journal
     success_count = 0
@@ -869,11 +869,11 @@ def main():
     
     # Summary
     print(f"\n{'='*80}")
-    print(f"📊 MIGRATION SUMMARY")
+    print(f" MIGRATION SUMMARY")
     print(f"{'='*80}")
-    print(f"✅ Successful: {success_count}")
-    print(f"❌ Failed: {fail_count}")
-    print(f"📝 Total: {len(journals)}")
+    print(f" Successful: {success_count}")
+    print(f" Failed: {fail_count}")
+    print(f" Total: {len(journals)}")
     print(f"{'='*80}")
 
 if __name__ == "__main__":
@@ -938,7 +938,7 @@ def get_all_journals_data(from_date="20250401", to_date="20250430", limit=None):
 
             # Bulk-save to prevent 'database is locked' errors
             database_manager.bulk_save_journals(db_data_list)
-            print(f"💾 Saved {len(journals)} journals to database")
+            print(f" Saved {len(journals)} journals to database")
 
         # ----------------------------------------------------------------
         # Build return stats (same as before)
@@ -966,7 +966,7 @@ def get_all_journals_data(from_date="20250401", to_date="20250430", limit=None):
         }
 
     except Exception as e:
-        print(f"❌ Error in get_all_journals_data: {e}")
+        print(f" Error in get_all_journals_data: {e}")
         return None
 
 def sync_journals_to_zoho(selected_journals=None, from_date="20250401", to_date="20250430", limit=None):
@@ -981,7 +981,7 @@ def sync_journals_to_zoho(selected_journals=None, from_date="20250401", to_date=
         limit: Maximum number of journals to sync (respects user input)
     """
     try:
-        print("🚀 Starting Zoho Sync (Journals)...")
+        print(" Starting Zoho Sync (Journals)...")
         
         # Get access token
         token = get_access_token()
@@ -1004,27 +1004,27 @@ def sync_journals_to_zoho(selected_journals=None, from_date="20250401", to_date=
             if database_manager:
                 db_journals = database_manager.get_journals_by_date_range(from_date, to_date, limit)
                 if db_journals:
-                    print(f"📊 Found {len(db_journals)} journals in database for sync.")
+                    print(f" Found {len(db_journals)} journals in database for sync.")
                     # Parse line_items from JSON string back to list of dicts
                     for journal in db_journals:
                         if "line_items" in journal and isinstance(journal["line_items"], str):
                             try:
                                 journal["line_items"] = json.loads(journal["line_items"])
                             except json.JSONDecodeError:
-                                print(f"❌ Error decoding line_items for journal {journal.get('journal_number')}")
+                                print(f" Error decoding line_items for journal {journal.get('journal_number')}")
                                 journal["line_items"] = [] # Fallback to empty list
                     journals_to_sync = db_journals
                 else:
-                    print("📊 No journals found in database. Fetching from Tally...")
+                    print(" No journals found in database. Fetching from Tally...")
                     journals_to_sync = fetch_tally_journals(from_date, to_date, limit)
             else:
-                print("📊 Database manager not available. Fetching from Tally...")
+                print(" Database manager not available. Fetching from Tally...")
                 journals_to_sync = fetch_tally_journals(from_date, to_date, limit)
         
         if not journals_to_sync:
             return {"status": "error", "message": "No journals to sync"}
         
-        print(f"📊 Syncing {len(journals_to_sync)} journal(s) to Zoho Books...")
+        print(f" Syncing {len(journals_to_sync)} journal(s) to Zoho Books...")
         
         stats = {"created": 0, "failed": 0}
         
@@ -1032,14 +1032,77 @@ def sync_journals_to_zoho(selected_journals=None, from_date="20250401", to_date=
             result = create_zoho_journal(token, journal, account_map, contact_map)
             if result:
                 stats["created"] += 1
-                print(f"✅ Synced Journal #{journal['journal_number']}")
+                print(f" Synced Journal #{journal['journal_number']}")
             else:
                 stats["failed"] += 1
-                print(f"❌ Failed Journal #{journal['journal_number']}")
+                print(f" Failed Journal #{journal['journal_number']}")
         
         return {"status": "success", "stats": stats}
         
     except Exception as e:
-        print(f"❌ Error in sync_journals_to_zoho: {e}")
+        print(f" Error in sync_journals_to_zoho: {e}")
         return {"status": "error", "message": str(e)}
+
+
+
+def parse_tally_json(json_path):
+    import json, re
+    try:
+        with open(json_path, 'r', encoding='utf-16') as f: data = json.load(f)
+    except:
+        with open(json_path, 'r', encoding='utf-8') as f: data = json.load(f)
+    if isinstance(data, list) and len(data) > 0 and 'date' in data[0]: return data
+    vouchers = data.get('tallymessage', [])
+    if isinstance(vouchers, dict): vouchers = [vouchers]
+    
+    journels = []
+    for v in vouchers:
+        if not isinstance(v, dict): continue
+        if 'vouchernumber' not in v and 'vouchertypename' not in v: continue
+        
+        j_date = str(v.get('date', '')).strip()
+        j_no = str(v.get('vouchernumber', '')).strip()
+        voucher_type = str(v.get('vouchertypename', 'Journal')).strip()
+        tally_guid = str(v.get('guid', '')).strip()
+        narration = str(v.get('narration', '')).strip()
+
+        ledger_entries = []
+        cost_centers_dict = {}
+
+        all_entries = v.get('allledgerentries.list', v.get('allledgerentries', []))
+        if not isinstance(all_entries, list): all_entries = [all_entries]
+        
+        for entry in all_entries:
+            if not isinstance(entry, dict): continue
+            lname = str(entry.get('ledgername', '')).strip()
+            amt_str = str(entry.get('amount', '0'))
+            nums = re.findall(r'[-\d.]+', amt_str)
+            amt = float(nums[-1]) if nums else 0.0
+            
+            is_deemed_positive = entry.get('isdeemedpositive', False)
+            if str(is_deemed_positive).lower() == 'true' or is_deemed_positive is True or 'yes' in str(is_deemed_positive).lower():
+                debit = abs(amt); credit = 0.0
+            else: debit = 0.0; credit = abs(amt)
+            
+            ledger_entries.append({"ledger_name": lname, "debit": debit, "credit": credit})
+            
+            cats = entry.get('categoryallocations.list', entry.get('categoryallocations', []))
+            if not isinstance(cats, list): cats = [cats]
+            for ca in cats:
+                if not isinstance(ca, dict): continue
+                cat_name = str(ca.get('category', '')).strip()
+                ccs = ca.get('costcentreallocations.list', ca.get('costcentreallocations', []))
+                if not isinstance(ccs, list): ccs = [ccs]
+                for cc in ccs:
+                    if not isinstance(cc, dict): continue
+                    cc_name = str(cc.get('name', '')).strip()
+                    cc_amt_str = str(cc.get('amount', '0'))
+                    ccnums = re.findall(r'[-\d.]+', cc_amt_str)
+                    cc_amt = float(ccnums[-1]) if ccnums else 0.0
+                    full = f"{cat_name} - {cc_name}" if cat_name and cc_name else (cc_name or cat_name)
+                    if full: cost_centers_dict[full] = abs(cc_amt)
+
+        cost_center_allocations = [{"category": k, "amount": v} for k, v in cost_centers_dict.items()]
+        journels.append({"date": j_date, "journal_number": j_no, "voucher_type": voucher_type, "tally_guid": tally_guid, "narration": narration, "ledger_entries": ledger_entries, "cost_center_allocations": cost_center_allocations})
+    return journels
 

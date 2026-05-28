@@ -9,7 +9,7 @@ sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 try:
     import database_manager
 except ImportError:
-    print("⚠️ Warning: Could not import database_manager. SQLite sync will be skipped.")
+    print("️ Warning: Could not import database_manager. SQLite sync will be skipped.")
     database_manager = None
 
 TALLY_URL = "http://localhost:9000"
@@ -140,15 +140,15 @@ def sync_reporting_tags_to_zoho():
         centres_by_cat[cat_key].append(c)
 
     # 2. Fetch existing Zoho Reporting Tags
-    print("🔍 Fetching existing Zoho Reporting Tags...")
+    print(" Fetching existing Zoho Reporting Tags...")
     existing_tags = {}  # tag_name.lower() -> tag_id
     tags_res = zoho.api_call("GET", "/settings/tags")
     if tags_res.get("code") == 0:
         for tag in tags_res.get("reporting_tags", []):
             existing_tags[tag["tag_name"].lower()] = tag["tag_id"]
-        print(f"✅ Found {len(existing_tags)} existing tags in Zoho.")
+        print(f" Found {len(existing_tags)} existing tags in Zoho.")
     else:
-        print(f"⚠️ Could not fetch existing tags: {tags_res.get('message')}")
+        print(f"️ Could not fetch existing tags: {tags_res.get('message')}")
 
     # 3. Process each category
     for cat in categories:
@@ -199,24 +199,24 @@ def sync_reporting_tags_to_zoho():
                     cat_result["options_created"] += 1
                     stats["options_created"] += 1
                     cat_result["option_details"].append({"name": centre_name, "status": "created"})
-                    print(f"   ✅ Option added: '{centre_name}'")
+                    print(f"    Option added: '{centre_name}'")
                 else:
                     err = opt_res.get("message", "Unknown")
                     cat_result["options_failed"] += 1
                     stats["options_failed"] += 1
                     cat_result["option_details"].append({"name": centre_name, "status": "failed", "error": err})
-                    print(f"   ❌ Option failed '{centre_name}': {err}")
+                    print(f"    Option failed '{centre_name}': {err}")
 
         else:
             # ── New tag: CREATE with all options bundled in one call ──
             if not centre_names:
-                print(f"⚠️  Skipping '{cat_name}' — no cost centres found (Zoho requires at least 1 option)")
+                print(f"️  Skipping '{cat_name}' — no cost centres found (Zoho requires at least 1 option)")
                 cat_result["status"] = "skipped_no_options"
                 cat_result["error"] = "No cost centres found for this category"
                 results.append(cat_result)
                 continue
 
-            print(f"✨ Creating Tag '{cat_name}' with {len(centre_names)} options...")
+            print(f" Creating Tag '{cat_name}' with {len(centre_names)} options...")
             payload = {
                 "tag_name": cat_name,
                 "tag_options": [{"tag_option_name": n} for n in centre_names]
@@ -233,13 +233,13 @@ def sync_reporting_tags_to_zoho():
                 stats["options_created"] += len(centre_names)
                 existing_tags[cat_key] = tag_id
                 cat_result["option_details"] = [{"name": n, "status": "created"} for n in centre_names]
-                print(f"✅ Created Tag '{cat_name}' with {len(centre_names)} options → ID: {tag_id}")
+                print(f" Created Tag '{cat_name}' with {len(centre_names)} options → ID: {tag_id}")
             else:
                 err_msg = create_res.get("message", "Unknown error")
                 cat_result["status"] = "failed"
                 cat_result["error"] = err_msg
                 stats["tags_failed"] += 1
-                print(f"❌ Failed to create Tag '{cat_name}': {err_msg}")
+                print(f" Failed to create Tag '{cat_name}': {err_msg}")
 
         results.append(cat_result)
 

@@ -20,7 +20,7 @@ def fetch_ledgers():
     global cached_data
     
     try:
-        print("📡 Fetching data from Tally...")
+        print(" Fetching data from Tally...")
         
         # Fetch groups and ledgers
         groups = tally.fetch_groups_from_tally()
@@ -48,11 +48,11 @@ def fetch_ledgers():
             }
         }
         
-        print(f"✅ Data fetched: {cached_data['stats']['total']} ledgers")
+        print(f" Data fetched: {cached_data['stats']['total']} ledgers")
         return jsonify(cached_data)
         
     except Exception as e:
-        print(f"❌ Error: {e}")
+        print(f" Error: {e}")
         import traceback
         traceback.print_exc()
         return jsonify({
@@ -117,10 +117,10 @@ def get_stats():
     return jsonify(cached_data["stats"])
 
 if __name__ == '__main__':
-    print("🚀 Starting Ledger Analysis API Server...")
-    print("📍 Server running on http://localhost:5000")
-    print("📄 Open http://localhost:5000 in your browser")
-    print("\n⚠️  Make sure Tally is running on port 9000!")
+    print(" Starting Ledger Analysis API Server...")
+    print(" Server running on http://localhost:5000")
+    print(" Open http://localhost:5000 in your browser")
+    print("\n️  Make sure Tally is running on port 9000!")
     print("-" * 60)
     
     app.run(debug=True, port=5000, host='0.0.0.0')

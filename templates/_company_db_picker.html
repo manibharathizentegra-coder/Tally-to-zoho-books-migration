@@ -1,0 +1,66 @@
+{# Shared Active Company DB picker for modules that read from SQLite. #}
+<div class="content-card p-3 mb-4">
+  <div class="row g-3 align-items-end">
+    <div class="col-lg-8">
+      <label class="form-label small text-muted mb-1">Active Company DB</label>
+      <div class="d-flex gap-2">
+        <select id="companyDbSelect" class="form-select"></select>
+        <button id="companyDbUseBtn" class="btn btn-outline-secondary btn-inline btn-nowrap" type="button">
+          <i class="bi bi-check2-circle"></i> Use
+        </button>
+      </div>
+      <div class="small text-muted mt-1">This page reads data from the active DB.</div>
+    </div>
+    <div class="col-lg-4 text-lg-end">
+      <div class="small text-muted">Current:</div>
+      <div class="fw-semibold" id="activeDbLabel">tally_data.db</div>
+    </div>
+  </div>
+</div>
+
+<script>
+  (function () {
+    const sel = document.getElementById('companyDbSelect');
+    const btn = document.getElementById('companyDbUseBtn');
+    const lbl = document.getElementById('activeDbLabel');
+    if (!sel || !btn) return;
+
+    async function loadCompanies() {
+      try {
+        const res = await fetch('/api/db/companies');
+        if (!res.ok) return;
+        const data = await res.json();
+        const companies = data.companies || [];
+        const active = data.active_db || 'tally_data.db';
+        sel.innerHTML = companies.map(c => `<option value="${c}">${c}</option>`).join('');
+        sel.value = active;
+        if (lbl) lbl.textContent = active;
+      } catch (e) {}
+    }
+
+    async function setActiveDb() {
+      const dbName = sel.value;
+      btn.disabled = true;
+      const old = btn.innerHTML;
+      btn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span> Saving...';
+      try {
+        const res = await fetch('/api/db/active', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ db_name: dbName })
+        });
+        if (res.ok) {
+          location.reload();
+          return;
+        }
+      } catch (e) {}
+      btn.disabled = false;
+      btn.innerHTML = old;
+    }
+
+    btn.addEventListener('click', setActiveDb);
+    document.addEventListener('DOMContentLoaded', loadCompanies);
+    loadCompanies();
+  })();
+</script>
+
